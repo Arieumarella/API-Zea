@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: pos_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-pos_db}
+      MYSQL_USER: ${MYSQL_USER:-pos_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-pos_password}
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: pos_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - PORT=${PORT:-3000}
+      - NODE_ENV=production
+      # Prisma will read DATABASE_URL from .env
+    ports:
+      - "3000:3000"
+    volumes: []
+    command: ["node", "index.js"]
+
+volumes:
+  db_data:
+    driver: local

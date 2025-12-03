@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model t_barang {
+  id          Int       @id @default(autoincrement())
+  kd_barang   String?   @db.VarChar(255)
+  nama_barang String?   @db.VarChar(255)
+  jml_yard    Decimal?  @db.Decimal(10, 0)
+  jml_rol     Decimal?  @db.Decimal(10, 0)
+  created_at  DateTime? @db.DateTime(0)
+  updated_at  DateTime? @db.DateTime(0)
+}
+
+model t_berjangka_keluar {
+  id              Int       @id @default(autoincrement())
+  id_transaksi    Int?
+  tgl_jatuh_tempo DateTime? @db.Date
+  jml_bayar       Decimal?  @db.Decimal(10, 0)
+  created_at      DateTime? @db.DateTime(0)
+  updated_at      DateTime? @db.DateTime(0)
+}
+
+model t_berjangka_masuk {
+  id              Int       @id @default(autoincrement())
+  id_transaksi    Int?
+  tgl_jatuh_tempo DateTime? @db.Date
+  jml_bayar       Decimal?  @db.Decimal(10, 0)
+  created_at      DateTime? @db.DateTime(0)
+  updated_at      DateTime? @db.DateTime(0)
+}
+
+model t_log {
+  id         Int       @id @default(autoincrement())
+  id_user    Int?
+  aksi       String?   @db.VarChar(255)
+  keterangan String?   @db.Text
+  created_at DateTime? @db.DateTime(0)
+  updated_at DateTime? @db.DateTime(0)
+}
+
+model t_oprasional {
+  id         Int       @id @default(autoincrement())
+  id_user    Int?
+  nama_baya  String?   @db.VarChar(255)
+  jml_biaya  Decimal?  @db.Decimal(10, 0)
+  created_at DateTime? @db.DateTime(0)
+  updated_at DateTime? @db.DateTime(0)
+}
+
+model t_pelanggan {
+  id         Int       @id @default(autoincrement())
+  nama       String?   @db.VarChar(255)
+  no_tlp     String?   @db.VarChar(255)
+  created_at DateTime? @db.DateTime(0)
+  updated_at DateTime? @db.DateTime(0)
+}
+
+model t_profile_toko {
+  id              Int       @id @default(autoincrement())
+  nama_toko       String?   @db.VarChar(255)
+  alamat          String?   @db.Text
+  nomor_telepon_1 String?   @db.VarChar(15)
+  nomor_telepon_2 String?   @db.VarChar(15)
+  nomor_telepon3  String?   @db.VarChar(15)
+  rekening        String?   @db.VarChar(20)
+  nama_rekening   String?   @db.VarChar(20)
+  maps            String?   @db.Text
+  created_at      DateTime? @db.DateTime(0)
+  updated_at      DateTime? @db.DateTime(0)
+}
+
+model t_saldo {
+  id         Int       @id @default(autoincrement())
+  jml_saldo  Decimal?  @db.Decimal(15, 0)
+  created_at DateTime? @db.DateTime(0)
+  updated_at DateTime? @db.DateTime(0)
+}
+
+model t_supplier {
+  id         Int       @id @default(autoincrement())
+  nama       String?   @db.VarChar(255)
+  no_tlp     String?   @db.VarChar(15)
+  created_at DateTime? @db.DateTime(0)
+  updated_at DateTime? @db.DateTime(0)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model t_transaksi_keluar {
+  id                Int       @id @default(autoincrement())
+  id_pelanggan      Int?
+  id_user           Int?
+  tgl_transaksi     DateTime? @db.Date
+  total_transaksi   Decimal?  @db.Decimal(10, 0)
+  status_pembayaran String?   @db.VarChar(255)
+  tenor             Int?
+  tipe_discount     String?   @db.VarChar(255)
+  jml_discount      Decimal?  @db.Decimal(10, 0)
+  tipe_ppn          String?   @db.VarChar(255)
+  jml_ppn           Decimal?  @db.Decimal(10, 0)
+  catatan           String?   @db.Text
+  created_at        DateTime? @db.DateTime(0)
+  updated_at        DateTime? @db.DateTime(0)
+}
+
+model t_transaksi_keluar_detail {
+  id                  Int       @id @default(autoincrement())
+  id_transaksi_keluar Int?
+  id_barang           Int?
+  jml_yard            Decimal?  @db.Decimal(10, 0)
+  jml_rol             Decimal?  @db.Decimal(10, 0)
+  harga_satuan        Decimal?  @db.Decimal(10, 0)
+  jml_yard_retur      Decimal?  @db.Decimal(10, 0)
+  jml_rol_retur       Decimal?  @db.Decimal(10, 0)
+  created_at          DateTime? @db.DateTime(0)
+  updated_at          DateTime? @db.DateTime(0)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model t_transaksi_masuk {
+  id                Int       @id @default(autoincrement())
+  id_supplier       Int?
+  id_user           Int?
+  tgl_transaksi     DateTime? @db.Date
+  total_transaksi   Decimal?  @db.Decimal(10, 0)
+  status_pembayaran String?   @db.VarChar(255)
+  tenor             Int?
+  tipe_discount     String    @db.VarChar(255)
+  jml_discount      Decimal?  @db.Decimal(10, 0)
+  tipe_ppn          String?   @db.VarChar(255)
+  jml_ppn           Decimal?  @db.Decimal(10, 0)
+  catatan           String?   @db.Text
+  created_at        DateTime? @db.DateTime(0)
+  updated_at        DateTime? @db.DateTime(0)
+}
+
+model t_transaksi_masuk_detail {
+  id                 Int       @id @default(autoincrement())
+  id_transaksi_masuk Int?
+  id_barang          Int?
+  jml_yard           Decimal?  @db.Decimal(10, 0)
+  jml_rol            Decimal?  @db.Decimal(10, 0)
+  harga_satuan       Decimal?  @db.Decimal(10, 0)
+  jml_yard_retur     Decimal?  @db.Decimal(10, 0)
+  jml_rol_retur      Decimal?  @db.Decimal(10, 0)
+  created_at         DateTime? @db.DateTime(0)
+  updated_at         DateTime? @db.DateTime(0)
+}
+
+model t_user {
+  id         Int       @id @default(autoincrement())
+  username   String?   @db.VarChar(255)
+  password   String?   @db.VarChar(255)
+  nama       String?   @db.VarChar(255)
+  jabatan    String?   @db.VarChar(255)
+  no_tlp     String?   @db.VarChar(15)
+  created_at DateTime? @db.DateTime(0)
+  updated_at DateTime? @db.DateTime(0)
+}

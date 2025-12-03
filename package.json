@@ -1,0 +1,30 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "API backend untuk aplikasi Point of Sale",
+  "dependencies": {
+    "@prisma/client": "^6.5.0",
+    "axios": "^1.9.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.13",
+    "dompurify": "^3.2.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "qs": "^6.14.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9",
+    "prisma": "^6.5.0"
+  }
+}
