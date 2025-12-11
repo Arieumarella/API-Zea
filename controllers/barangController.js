@@ -73,6 +73,15 @@ exports.createBarang = async (req, res) => {
 
     const kdClean = String(kd_barang).trim();
 
+    const exists = await prisma.t_barang.findFirst({
+      where: { kd_barang: kdClean },
+    });
+
+
+    if (exists) {
+      return res.status(400)
+      .json({ status: false, message: "kd_barang sudah digunakan" });
+    }
 
     const barang = await prisma.t_barang.create({
       data: {
@@ -121,6 +130,16 @@ exports.updateBarang = async (req, res) => {
           .json({ status: false, message: "kd_barang tidak boleh kosong" });
       }
      
+      if (kdClean !== barang.kd_barang) {
+        const exists = await prisma.t_barang.findFirst({
+          where: { kd_barang: kdClean },
+        });
+        if (exists) {
+          return res
+            .status(400)
+            .json({ status: false, message: "kd_barang sudah digunakan" });
+        }
+      }
       dataToUpdate.kd_barang = kdClean;
     }
 
