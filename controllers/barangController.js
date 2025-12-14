@@ -9,7 +9,14 @@ exports.getBarang = async (req, res) => {
     const take = 10;
     const skip = (page - 1) * take;
     const search = req.query.search || "";
-    const where = search ? { nama_barang: { contains: search } } : {};
+    const where = search
+      ? {
+          OR: [
+            { nama_barang: { contains: search } },
+            { kd_barang: { contains: search } },
+          ],
+        }
+      : {};
     const [barang, total] = await Promise.all([
       prisma.t_barang.findMany({
         skip,
@@ -281,7 +288,14 @@ exports.stockBarang = async (req, res) => {
     const skip = (page - 1) * take;
     const search = req.query.search || "";
 
-    const where = search ? { nama_barang: { contains: search } } : {};
+    const where = search
+      ? {
+          OR: [
+            { nama_barang: { contains: search } },
+            { kd_barang: { contains: search } },
+          ],
+        }
+      : {};
 
     // total count
     const total = await prisma.t_barang.count({ where });
