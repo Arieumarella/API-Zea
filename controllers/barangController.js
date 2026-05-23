@@ -11,11 +11,11 @@ exports.getBarang = async (req, res) => {
     const search = req.query.search || "";
     const where = search
       ? {
-          OR: [
-            { nama_barang: { contains: search } },
-            { kd_barang: { contains: search } },
-          ],
-        }
+        OR: [
+          { nama_barang: { contains: search } },
+          { kd_barang: { contains: search } },
+        ],
+      }
       : {};
     const [barang, total] = await Promise.all([
       prisma.t_barang.findMany({
@@ -87,7 +87,7 @@ exports.createBarang = async (req, res) => {
 
     if (exists) {
       return res.status(400)
-      .json({ status: false, message: "kd_barang sudah digunakan" });
+        .json({ status: false, message: "kd_barang sudah digunakan" });
     }
 
     const barang = await prisma.t_barang.create({
@@ -136,7 +136,7 @@ exports.updateBarang = async (req, res) => {
           .status(400)
           .json({ status: false, message: "kd_barang tidak boleh kosong" });
       }
-     
+
       if (kdClean !== barang.kd_barang) {
         const exists = await prisma.t_barang.findFirst({
           where: { kd_barang: kdClean },
@@ -284,17 +284,18 @@ exports.stockBarang = async (req, res) => {
   try {
     // Pagination and optional search (nama_barang)
     const page = parseInt(req.query.page) || 1;
-    const take = 10;
-    const skip = (page - 1) * take;
+    const isAll = req.query.all === "true";
+    const take = isAll ? undefined : 10;
+    const skip = isAll ? undefined : (page - 1) * take;
     const search = req.query.search || "";
 
     const where = search
       ? {
-          OR: [
-            { nama_barang: { contains: search } },
-            { kd_barang: { contains: search } },
-          ],
-        }
+        OR: [
+          { nama_barang: { contains: search } },
+          { kd_barang: { contains: search } },
+        ],
+      }
       : {};
 
     // total count
@@ -303,8 +304,7 @@ exports.stockBarang = async (req, res) => {
     // get paginated barang
     const barang = await prisma.t_barang.findMany({
       where,
-      skip,
-      take,
+      ...(isAll ? {} : { skip, take }),
       orderBy: { id: "desc" },
       select: {
         id: true,
@@ -365,6 +365,113 @@ exports.stockBarang = async (req, res) => {
       total,
       totalPages: Math.ceil(total / take),
     });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+exports.detilSisaStok = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+
+    const incoming = await prisma.$queryRaw`
+      SELECT 
+        a.id AS detail_id,
+        a.id_transaksi_masuk,
+        b.tgl_transaksi,
+        s.nama AS nama_supplier,
+        a.jml_yard,
+        a.jml_rol,
+        COALESCE(a.jml_yard_retur, 0) AS jml_yard_retur,
+        COALESCE(a.jml_rol_retur, 0) AS jml_rol_retur,
+        a.harga_satuan
+      FROM t_transaksi_masuk_detail AS a
+      LEFT JOIN t_transaksi_masuk AS b ON a.id_transaksi_masuk = b.id
+      LEFT JOIN t_supplier AS s ON b.id_supplier = s.id
+      WHERE a.id_barang = ${id}
+      ORDER BY b.tgl_transaksi ASC, a.id ASC
+    `;
+
+    const outgoing = await prisma.$queryRaw`
+      SELECT 
+        a.id AS detail_id,
+        a.id_transaksi_keluar,
+        b.tgl_transaksi,
+        a.jml_yard,
+        a.jml_rol,
+        COALESCE(a.jml_yard_retur, 0) AS jml_yard_retur,
+        COALESCE(a.jml_rol_retur, 0) AS jml_rol_retur
+      FROM t_transaksi_keluar_detail AS a
+      LEFT JOIN t_transaksi_keluar AS b ON a.id_transaksi_keluar = b.id
+      WHERE a.id_barang = ${id}
+      ORDER BY b.tgl_transaksi ASC, a.id ASC
+    `;
+
+    const batches = incoming.map((item) => ({
+      detail_id: item.detail_id,
+      id_transaksi_masuk: item.id_transaksi_masuk,
+      tgl_transaksi: item.tgl_transaksi,
+      nama_supplier: item.nama_supplier || "Umum/Unknown",
+      harga_satuan: Number(item.harga_satuan || 0),
+      orig_yard: Number(item.jml_yard || 0) - Number(item.jml_yard_retur || 0),
+      orig_rol: Number(item.jml_rol || 0) - Number(item.jml_rol_retur || 0),
+      sisa_yard: Number(item.jml_yard || 0) - Number(item.jml_yard_retur || 0),
+      sisa_rol: Number(item.jml_rol || 0) - Number(item.jml_rol_retur || 0),
+    }));
+
+    let totalSoldYard = 0;
+    let totalSoldRol = 0;
+    outgoing.forEach((item) => {
+      totalSoldYard += Number(item.jml_yard || 0) - Number(item.jml_yard_retur || 0);
+      totalSoldRol += Number(item.jml_rol || 0) - Number(item.jml_rol_retur || 0);
+    });
+
+    let remainingSoldYard = totalSoldYard;
+    for (let i = 0; i < batches.length; i++) {
+      if (remainingSoldYard <= 0) break;
+      const batch = batches[i];
+      if (batch.sisa_yard > 0) {
+        if (remainingSoldYard >= batch.sisa_yard) {
+          remainingSoldYard -= batch.sisa_yard;
+          batch.sisa_yard = 0;
+        } else {
+          batch.sisa_yard -= remainingSoldYard;
+          remainingSoldYard = 0;
+        }
+      }
+    }
+
+    let remainingSoldRol = totalSoldRol;
+    for (let i = 0; i < batches.length; i++) {
+      if (remainingSoldRol <= 0) break;
+      const batch = batches[i];
+      if (batch.sisa_rol > 0) {
+        if (remainingSoldRol >= batch.sisa_rol) {
+          remainingSoldRol -= batch.sisa_rol;
+          batch.sisa_rol = 0;
+        } else {
+          batch.sisa_rol -= remainingSoldRol;
+          remainingSoldRol = 0;
+        }
+      }
+    }
+
+    const activeStockDetails = batches
+      .filter((b) => b.sisa_yard > 0 || b.sisa_rol > 0)
+      .map((b) => ({
+        id_transaksi_masuk: b.id_transaksi_masuk,
+        tgl_transaksi: b.tgl_transaksi,
+        nama_supplier: b.nama_supplier,
+        harga_satuan: b.harga_satuan,
+        orig_yard: b.orig_yard,
+        orig_rol: b.orig_rol,
+        sisa_yard: b.sisa_yard,
+        sisa_rol: b.sisa_rol,
+        total_nilai_sisa: b.sisa_yard * b.harga_satuan,
+      }));
+
+    return res.status(200).json({ status: true, data: activeStockDetails });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ status: false, message: error.message });

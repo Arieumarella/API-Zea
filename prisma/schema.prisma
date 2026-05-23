@@ -11,8 +11,8 @@ model t_barang {
   id          Int       @id @default(autoincrement())
   kd_barang   String?   @db.VarChar(255)
   nama_barang String?   @db.VarChar(255)
-  jml_yard    Decimal?  @db.Decimal(10, 0)
-  jml_rol     Decimal?  @db.Decimal(10, 0)
+  jml_yard    Decimal?  @db.Decimal(12, 2)
+  jml_rol     Decimal?  @db.Decimal(12, 2)
   created_at  DateTime? @db.DateTime(0)
   updated_at  DateTime? @db.DateTime(0)
 }
@@ -21,7 +21,7 @@ model t_berjangka_keluar {
   id              Int       @id @default(autoincrement())
   id_transaksi    Int?
   tgl_jatuh_tempo DateTime? @db.Date
-  jml_bayar       Decimal?  @db.Decimal(10, 0)
+  jml_bayar       Decimal?  @db.Decimal(15, 2)
   created_at      DateTime? @db.DateTime(0)
   updated_at      DateTime? @db.DateTime(0)
 }
@@ -30,7 +30,7 @@ model t_berjangka_masuk {
   id              Int       @id @default(autoincrement())
   id_transaksi    Int?
   tgl_jatuh_tempo DateTime? @db.Date
-  jml_bayar       Decimal?  @db.Decimal(10, 0)
+  jml_bayar       Decimal?  @db.Decimal(15, 2)
   created_at      DateTime? @db.DateTime(0)
   updated_at      DateTime? @db.DateTime(0)
 }
@@ -48,7 +48,8 @@ model t_oprasional {
   id         Int       @id @default(autoincrement())
   id_user    Int?
   nama_baya  String?   @db.VarChar(255)
-  jml_biaya  Decimal?  @db.Decimal(10, 0)
+  tanggal    DateTime? @db.Date
+  jml_biaya  Decimal?  @db.Decimal(15, 2)
   created_at DateTime? @db.DateTime(0)
   updated_at DateTime? @db.DateTime(0)
 }
@@ -77,7 +78,7 @@ model t_profile_toko {
 
 model t_saldo {
   id         Int       @id @default(autoincrement())
-  jml_saldo  Decimal?  @db.Decimal(15, 0)
+  jml_saldo  Decimal?  @db.Decimal(15, 2)
   created_at DateTime? @db.DateTime(0)
   updated_at DateTime? @db.DateTime(0)
 }
@@ -96,13 +97,13 @@ model t_transaksi_keluar {
   id_pelanggan      Int?
   id_user           Int?
   tgl_transaksi     DateTime? @db.Date
-  total_transaksi   Decimal?  @db.Decimal(10, 0)
+  total_transaksi   Decimal?  @db.Decimal(15, 2)
   status_pembayaran String?   @db.VarChar(255)
   tenor             Int?
   tipe_discount     String?   @db.VarChar(255)
-  jml_discount      Decimal?  @db.Decimal(10, 0)
+  jml_discount      Decimal?  @db.Decimal(15, 2)
   tipe_ppn          String?   @db.VarChar(255)
-  jml_ppn           Decimal?  @db.Decimal(10, 0)
+  jml_ppn           Decimal?  @db.Decimal(15, 2)
   catatan           String?   @db.Text
   created_at        DateTime? @db.DateTime(0)
   updated_at        DateTime? @db.DateTime(0)
@@ -112,11 +113,11 @@ model t_transaksi_keluar_detail {
   id                  Int       @id @default(autoincrement())
   id_transaksi_keluar Int?
   id_barang           Int?
-  jml_yard            Decimal?  @db.Decimal(10, 0)
-  jml_rol             Decimal?  @db.Decimal(10, 0)
-  harga_satuan        Decimal?  @db.Decimal(10, 0)
-  jml_yard_retur      Decimal?  @db.Decimal(10, 0)
-  jml_rol_retur       Decimal?  @db.Decimal(10, 0)
+  jml_yard            Decimal?  @db.Decimal(12, 2)
+  jml_rol             Decimal?  @db.Decimal(12, 2)
+  harga_satuan        Decimal?  @db.Decimal(15, 2)
+  jml_yard_retur      Decimal?  @db.Decimal(12, 2)
+  jml_rol_retur       Decimal?  @db.Decimal(12, 2)
   created_at          DateTime? @db.DateTime(0)
   updated_at          DateTime? @db.DateTime(0)
 }
@@ -127,13 +128,13 @@ model t_transaksi_masuk {
   id_supplier       Int?
   id_user           Int?
   tgl_transaksi     DateTime? @db.Date
-  total_transaksi   Decimal?  @db.Decimal(10, 0)
+  total_transaksi   Decimal?  @db.Decimal(15, 2)
   status_pembayaran String?   @db.VarChar(255)
   tenor             Int?
   tipe_discount     String    @db.VarChar(255)
-  jml_discount      Decimal?  @db.Decimal(10, 0)
+  jml_discount      Decimal?  @db.Decimal(15, 2)
   tipe_ppn          String?   @db.VarChar(255)
-  jml_ppn           Decimal?  @db.Decimal(10, 0)
+  jml_ppn           Decimal?  @db.Decimal(15, 2)
   catatan           String?   @db.Text
   created_at        DateTime? @db.DateTime(0)
   updated_at        DateTime? @db.DateTime(0)
@@ -143,11 +144,11 @@ model t_transaksi_masuk_detail {
   id                 Int       @id @default(autoincrement())
   id_transaksi_masuk Int?
   id_barang          Int?
-  jml_yard           Decimal?  @db.Decimal(10, 0)
-  jml_rol            Decimal?  @db.Decimal(10, 0)
-  harga_satuan       Decimal?  @db.Decimal(10, 0)
-  jml_yard_retur     Decimal?  @db.Decimal(10, 0)
-  jml_rol_retur      Decimal?  @db.Decimal(10, 0)
+  jml_yard           Decimal?  @db.Decimal(12, 2)
+  jml_rol            Decimal?  @db.Decimal(12, 2)
+  harga_satuan       Decimal?  @db.Decimal(15, 2)
+  jml_yard_retur     Decimal?  @db.Decimal(12, 2)
+  jml_rol_retur      Decimal?  @db.Decimal(12, 2)
   created_at         DateTime? @db.DateTime(0)
   updated_at         DateTime? @db.DateTime(0)
 }

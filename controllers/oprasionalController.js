@@ -5,8 +5,9 @@ const prisma = new PrismaClient();
 exports.getOprasional = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const take = 10;
-    const skip = (page - 1) * take;
+    const isAll = req.query.all === "true";
+    const take = isAll ? undefined : 10;
+    const skip = isAll ? undefined : (page - 1) * take;
     const search = req.query.search || "";
     const waktuAwal = req.query.waktuAwal
       ? new Date(req.query.waktuAwal)
@@ -27,8 +28,7 @@ exports.getOprasional = async (req, res) => {
     }
     const [oprasional, total] = await Promise.all([
       prisma.t_oprasional.findMany({
-        skip,
-        take,
+        ...(isAll ? {} : { skip, take }),
         where,
         orderBy: { id: "desc" },
       }),
@@ -55,6 +55,7 @@ exports.getOprasional = async (req, res) => {
     const data = oprasional.map((item) => ({
       id: item.id,
       nama_baya: item.nama_baya,
+      tanggal: item.tanggal,
       jml_biaya: item.jml_biaya != null ? Number(item.jml_biaya) : 0,
       penginput: item.id_user ? userMap[item.id_user] || null : null,
       created_at: item.created_at,
@@ -94,7 +95,7 @@ exports.getOprasionalById = async (req, res) => {
 // Create oprasional
 exports.createOprasional = async (req, res) => {
   try {
-    const { nama_baya, jml_biaya } = req.body;
+    const { nama_baya, jml_biaya, tanggal } = req.body;
     const id_user = req.user.userId;
     // Ambil saldo terakhir
     const saldo = await prisma.t_saldo.findFirst({ orderBy: { id: "desc" } });
@@ -117,6 +118,7 @@ exports.createOprasional = async (req, res) => {
       data: {
         id_user,
         nama_baya,
+        tanggal: tanggal ? new Date(tanggal) : null,
         jml_biaya,
         created_at: new Date(),
         updated_at: new Date(),
@@ -133,7 +135,7 @@ exports.createOprasional = async (req, res) => {
 exports.updateOprasional = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { nama_baya, jml_biaya } = req.body;
+    const { nama_baya, jml_biaya, tanggal } = req.body;
     const id_user = req.user.userId;
     const oprasional = await prisma.t_oprasional.findUnique({ where: { id } });
     if (!oprasional) {
@@ -177,6 +179,7 @@ exports.updateOprasional = async (req, res) => {
       data: {
         id_user,
         nama_baya,
+        tanggal: tanggal ? new Date(tanggal) : null,
         jml_biaya,
         updated_at: new Date(),
       },

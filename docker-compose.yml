@@ -20,7 +20,6 @@ services:
       retries: 5
       start_period: 10s
     volumes: []
-    command: ["node", "index.js"]
 
 # Note: This compose file is app-only. The application will connect to an external
 # MySQL instance defined by the `DATABASE_URL` value in your `.env` file.

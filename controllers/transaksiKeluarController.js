@@ -241,9 +241,11 @@ exports.createTransaksiKeluar = async (req, res) => {
 exports.getTransaksiKeluar = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const take = 10;
-    const skip = (page - 1) * take;
+    const isAll = req.query.all === "true";
+    const take = isAll ? undefined : 10;
+    const skip = isAll ? undefined : (page - 1) * take;
     const search = req.query.search || "";
+    const kdBarang = req.query.kdBarang || "";
     const pelangganId = req.query.pelangganId
       ? parseInt(req.query.pelangganId)
       : null;
@@ -261,10 +263,33 @@ exports.getTransaksiKeluar = async (req, res) => {
     else if (waktuAwal) where.tgl_transaksi = { gte: waktuAwal };
     else if (waktuAkhir) where.tgl_transaksi = { lte: waktuAkhir };
 
+    if (kdBarang) {
+      const matchingBarang = await prisma.t_barang.findMany({
+        where: {
+          kd_barang: {
+            contains: kdBarang,
+          },
+        },
+        select: { id: true },
+      });
+      const barangIds = matchingBarang.map((b) => b.id);
+
+      const matchingDetails = await prisma.t_transaksi_keluar_detail.findMany({
+        where: {
+          id_barang: { in: barangIds },
+        },
+        select: { id_transaksi_keluar: true },
+      });
+      const matchingTrxIds = Array.from(
+        new Set(matchingDetails.map((d) => d.id_transaksi_keluar).filter(Boolean))
+      );
+
+      where.id = { in: matchingTrxIds };
+    }
+
     const [data, total] = await Promise.all([
       prisma.t_transaksi_keluar.findMany({
-        skip,
-        take,
+        ...(isAll ? {} : { skip, take }),
         where,
         orderBy: { id: "desc" },
       }),

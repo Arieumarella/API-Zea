@@ -149,7 +149,9 @@ exports.getChartPenjualan = async (req, res) => {
     if (filter === "harian") {
       // Group by DAYNAME for current week
       const penjualan = await prisma.$queryRaw`
-        SELECT DAYNAME(tgl_transaksi) AS label, SUM(total_transaksi) AS penjualan
+        SELECT DAYNAME(tgl_transaksi) AS label,
+          SUM(total_transaksi) AS penjualan,
+          SUM(GREATEST(0, IF(status_pembayaran = '1', total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = t_transaksi_keluar.id), 0), 0))) AS belum_dibayar
         FROM t_transaksi_keluar
         WHERE YEARWEEK(tgl_transaksi, 1) = YEARWEEK(CURRENT_DATE(), 1)
         GROUP BY DAYNAME(tgl_transaksi)
@@ -161,10 +163,10 @@ exports.getChartPenjualan = async (req, res) => {
         GROUP BY DAYNAME(tgl_transaksi)
       `;
       const oprasional = await prisma.$queryRaw`
-        SELECT DAYNAME(created_at) AS label, SUM(jml_biaya) AS pengeluaran
+        SELECT DAYNAME(COALESCE(tanggal, created_at)) AS label, SUM(jml_biaya) AS pengeluaran
         FROM t_oprasional
-        WHERE YEARWEEK(created_at, 1) = YEARWEEK(CURRENT_DATE(), 1)
-        GROUP BY DAYNAME(created_at)
+        WHERE YEARWEEK(COALESCE(tanggal, created_at), 1) = YEARWEEK(CURRENT_DATE(), 1)
+        GROUP BY DAYNAME(COALESCE(tanggal, created_at))
       `;
       const labels = [
         "Senin",
@@ -184,13 +186,15 @@ exports.getChartPenjualan = async (req, res) => {
           penjualan: Number(pen?.penjualan || 0),
           pengeluaran:
             Number(peng?.pengeluaran || 0) + Number(opr?.pengeluaran || 0),
+          belum_dibayar: Number(pen?.belum_dibayar || 0),
         };
       });
     } else if (filter === "mingguan") {
       // Group by week in current month
       const penjualan = await prisma.$queryRaw`
         SELECT CONCAT('Minggu ', WEEK(tgl_transaksi) - WEEK(DATE_FORMAT(tgl_transaksi, '%Y-%m-01')) + 1) AS label,
-          SUM(total_transaksi) AS penjualan
+          SUM(total_transaksi) AS penjualan,
+          SUM(GREATEST(0, IF(status_pembayaran = '1', total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = t_transaksi_keluar.id), 0), 0))) AS belum_dibayar
         FROM t_transaksi_keluar
         WHERE MONTH(tgl_transaksi) = MONTH(CURRENT_DATE()) AND YEAR(tgl_transaksi) = YEAR(CURRENT_DATE())
         GROUP BY label
@@ -203,9 +207,9 @@ exports.getChartPenjualan = async (req, res) => {
         GROUP BY label
       `;
       const oprasional = await prisma.$queryRaw`
-        SELECT CONCAT('Minggu ', WEEK(created_at) - WEEK(DATE_FORMAT(created_at, '%Y-%m-01')) + 1) AS label, SUM(jml_biaya) AS pengeluaran
+        SELECT CONCAT('Minggu ', WEEK(COALESCE(tanggal, created_at)) - WEEK(DATE_FORMAT(COALESCE(tanggal, created_at), '%Y-%m-01')) + 1) AS label, SUM(jml_biaya) AS pengeluaran
         FROM t_oprasional
-        WHERE MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE())
+        WHERE MONTH(COALESCE(tanggal, created_at)) = MONTH(CURRENT_DATE()) AND YEAR(COALESCE(tanggal, created_at)) = YEAR(CURRENT_DATE())
         GROUP BY label
       `;
       const mingguLabels = [
@@ -224,12 +228,15 @@ exports.getChartPenjualan = async (req, res) => {
           penjualan: Number(pen?.penjualan || 0),
           pengeluaran:
             Number(peng?.pengeluaran || 0) + Number(opr?.pengeluaran || 0),
+          belum_dibayar: Number(pen?.belum_dibayar || 0),
         };
       });
     } else if (filter === "tahunan") {
       // Group by year
       const penjualan = await prisma.$queryRaw`
-        SELECT YEAR(tgl_transaksi) AS label, SUM(total_transaksi) AS penjualan
+        SELECT YEAR(tgl_transaksi) AS label,
+          SUM(total_transaksi) AS penjualan,
+          SUM(GREATEST(0, IF(status_pembayaran = '1', total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = t_transaksi_keluar.id), 0), 0))) AS belum_dibayar
         FROM t_transaksi_keluar
         GROUP BY YEAR(tgl_transaksi)
         ORDER BY label ASC
@@ -241,9 +248,9 @@ exports.getChartPenjualan = async (req, res) => {
         ORDER BY label ASC
       `;
       const oprasional = await prisma.$queryRaw`
-        SELECT YEAR(created_at) AS label, SUM(jml_biaya) AS pengeluaran
+        SELECT YEAR(COALESCE(tanggal, created_at)) AS label, SUM(jml_biaya) AS pengeluaran
         FROM t_oprasional
-        GROUP BY YEAR(created_at)
+        GROUP BY YEAR(COALESCE(tanggal, created_at))
       `;
       const tahunLabels = [
         ...new Set([
@@ -261,12 +268,15 @@ exports.getChartPenjualan = async (req, res) => {
           penjualan: Number(pen?.penjualan || 0),
           pengeluaran:
             Number(peng?.pengeluaran || 0) + Number(opr?.pengeluaran || 0),
+          belum_dibayar: Number(pen?.belum_dibayar || 0),
         };
       });
     } else {
       // Default: bulanan (group by month in current year)
       const penjualan = await prisma.$queryRaw`
-        SELECT MONTHNAME(tgl_transaksi) AS label, SUM(total_transaksi) AS penjualan
+        SELECT MONTHNAME(tgl_transaksi) AS label,
+          SUM(total_transaksi) AS penjualan,
+          SUM(GREATEST(0, IF(status_pembayaran = '1', total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = t_transaksi_keluar.id), 0), 0))) AS belum_dibayar
         FROM t_transaksi_keluar
         WHERE YEAR(tgl_transaksi) = YEAR(CURRENT_DATE())
         GROUP BY MONTH(tgl_transaksi)
@@ -280,11 +290,11 @@ exports.getChartPenjualan = async (req, res) => {
         ORDER BY MONTH(tgl_transaksi)
       `;
       const oprasional = await prisma.$queryRaw`
-        SELECT MONTHNAME(created_at) AS label, SUM(jml_biaya) AS pengeluaran
+        SELECT MONTHNAME(COALESCE(tanggal, created_at)) AS label, SUM(jml_biaya) AS pengeluaran
         FROM t_oprasional
-        WHERE YEAR(created_at) = YEAR(CURRENT_DATE())
-        GROUP BY MONTH(created_at)
-        ORDER BY MONTH(created_at)
+        WHERE YEAR(COALESCE(tanggal, created_at)) = YEAR(CURRENT_DATE())
+        GROUP BY MONTH(COALESCE(tanggal, created_at))
+        ORDER BY MONTH(COALESCE(tanggal, created_at))
       `;
       const bulanLabels = [
         "Jan",
@@ -310,6 +320,7 @@ exports.getChartPenjualan = async (req, res) => {
           penjualan: Number(pen?.penjualan || 0),
           pengeluaran:
             Number(peng?.pengeluaran || 0) + Number(opr?.pengeluaran || 0),
+          belum_dibayar: Number(pen?.belum_dibayar || 0),
         };
       });
     }
@@ -341,8 +352,8 @@ exports.getDataOprasional = async (req, res) => {
     FROM
         t_oprasional
     WHERE
-        DATE(created_at) >= ${dari}
-        AND DATE(created_at) <= ${sampai}
+        DATE(COALESCE(tanggal, created_at)) >= ${dari}
+        AND DATE(COALESCE(tanggal, created_at)) <= ${sampai}
     ORDER BY
         id DESC;
         `;

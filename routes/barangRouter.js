@@ -19,4 +19,10 @@ router.get(
   barangController.detilKeluar
 );
 
+router.get(
+  "/barang/detilSisa/:id",
+  verifyToken,
+  barangController.detilSisaStok
+);
+
 module.exports = router;
