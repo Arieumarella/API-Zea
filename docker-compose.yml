@@ -20,7 +20,13 @@ services:
       retries: 5
       start_period: 10s
     volumes: []
+    networks:
+      - pos_network
 
 # Note: This compose file is app-only. The application will connect to an external
 # MySQL instance defined by the `DATABASE_URL` value in your `.env` file.
 # Example `.env` setting: DATABASE_URL="mysql://root:MyRootPass@72.60.76.151:3306/pos_db"
+
+networks:
+  pos_network:
+    external: true
