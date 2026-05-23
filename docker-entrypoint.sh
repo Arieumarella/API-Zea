@@ -11,8 +11,19 @@ echo "=== Waiting for database connection ==="
 MAX_RETRIES=15
 RETRY_COUNT=0
 
-# Wait until DB is reachable (prisma migrate status exits 0 only if DB is up)
-until npx prisma migrate status --schema=./prisma/schema.prisma > /dev/null 2>&1; do
+# Wait until DB TCP port is reachable using Node.js
+# NOTE: prisma migrate status returns exit code 1 when there are pending migrations,
+# so we use a raw TCP check instead to avoid false "not ready" loops.
+until node -e "
+const net = require('net');
+const url = new URL(process.env.DATABASE_URL.replace(/^mysql:/, 'http:'));
+const port = parseInt(url.port) || 3306;
+const host = url.hostname;
+const c = net.createConnection(port, host, () => { c.destroy(); process.exit(0); });
+c.setTimeout(3000);
+c.on('timeout', () => { c.destroy(); process.exit(1); });
+c.on('error', () => process.exit(1));
+" 2>/dev/null; do
   RETRY_COUNT=$((RETRY_COUNT + 1))
   if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
     echo "ERROR: Cannot connect to database after $MAX_RETRIES attempts. Aborting."
