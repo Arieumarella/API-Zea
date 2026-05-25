@@ -248,6 +248,8 @@ exports.getTransaksiKeluar = async (req, res) => {
     const kdBarang = req.query.kdBarang || "";
     const pelangganId = req.query.pelangganId
       ? parseInt(req.query.pelangganId)
+      : req.query.customerId
+      ? parseInt(req.query.customerId)
       : null;
     const waktuAwal = req.query.waktuAwal
       ? new Date(req.query.waktuAwal)
