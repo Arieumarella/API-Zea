@@ -319,24 +319,25 @@ exports.stockBarang = async (req, res) => {
 
     const ids = barang.map((b) => b.id);
 
-    // get totals sold per barang for the current page
+    // get totals sold per barang for the current page (net of retur)
     let soldAgg = [];
     if (ids.length > 0) {
-      soldAgg = await prisma.t_transaksi_keluar_detail.groupBy({
-        by: ["id_barang"],
-        where: { id_barang: { in: ids } },
-        _sum: {
-          jml_yard: true,
-          jml_rol: true,
-        },
-      });
+      soldAgg = await prisma.$queryRaw`
+        SELECT 
+          id_barang,
+          SUM(COALESCE(jml_yard, 0) - COALESCE(jml_yard_retur, 0)) AS tot_yard,
+          SUM(COALESCE(jml_rol, 0) - COALESCE(jml_rol_retur, 0)) AS tot_rol
+        FROM t_transaksi_keluar_detail
+        WHERE id_barang IN (${ids.join(",")})
+        GROUP BY id_barang
+      `;
     }
 
     const soldMap = new Map();
     soldAgg.forEach((s) => {
       soldMap.set(s.id_barang, {
-        tot_yard_terjual: Number(s._sum.jml_yard || 0),
-        tot_rol_terjual: Number(s._sum.jml_rol || 0),
+        tot_yard_terjual: Number(s.tot_yard || 0),
+        tot_rol_terjual: Number(s.tot_rol || 0),
       });
     });
 
@@ -414,8 +415,10 @@ exports.detilSisaStok = async (req, res) => {
       tgl_transaksi: item.tgl_transaksi,
       nama_supplier: item.nama_supplier || "Umum/Unknown",
       harga_satuan: Number(item.harga_satuan || 0),
-      orig_yard: Number(item.jml_yard || 0) - Number(item.jml_yard_retur || 0),
-      orig_rol: Number(item.jml_rol || 0) - Number(item.jml_rol_retur || 0),
+      orig_yard: Number(item.jml_yard || 0),
+      orig_rol: Number(item.jml_rol || 0),
+      jml_yard_retur: Number(item.jml_yard_retur || 0),
+      jml_rol_retur: Number(item.jml_rol_retur || 0),
       sisa_yard: Number(item.jml_yard || 0) - Number(item.jml_yard_retur || 0),
       sisa_rol: Number(item.jml_rol || 0) - Number(item.jml_rol_retur || 0),
     }));

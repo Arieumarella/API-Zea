@@ -120,9 +120,9 @@ exports.getPalingLaku = async (req, res) => {
 
     const result = await prisma.$queryRaw`
       SELECT b.nama_barang AS nama, terjual, revenue FROM (
-        SELECT b.id_barang, SUM(b.jml_yard) AS terjual, SUM(b.jml_yard * b.harga_satuan) AS revenue FROM (SELECT * FROM t_transaksi_keluar WHERE tgl_transaksi >= ${dari} AND tgl_transaksi <= ${sampai}) AS a
-        LEFT JOIN (SELECT id_barang, id_transaksi_keluar, jml_yard, harga_satuan FROM t_transaksi_keluar_detail) AS b ON a.id=b.id_transaksi_keluar
-        GROUP BY b.id_barang ORDER BY SUM(b.jml_yard) DESC LIMIT 5
+        SELECT b.id_barang, SUM(COALESCE(b.jml_yard, 0) - COALESCE(b.jml_yard_retur, 0)) AS terjual, SUM((COALESCE(b.jml_yard, 0) - COALESCE(b.jml_yard_retur, 0)) * b.harga_satuan) AS revenue FROM (SELECT * FROM t_transaksi_keluar WHERE tgl_transaksi >= ${dari} AND tgl_transaksi <= ${sampai}) AS a
+        LEFT JOIN (SELECT id_barang, id_transaksi_keluar, jml_yard, jml_yard_retur, harga_satuan FROM t_transaksi_keluar_detail) AS b ON a.id=b.id_transaksi_keluar
+        GROUP BY b.id_barang ORDER BY terjual DESC LIMIT 5
         ) AS a
         LEFT JOIN
         (SELECT id, nama_barang FROM t_barang) AS b ON a.id_barang=b.id
@@ -149,24 +149,24 @@ exports.getChartPenjualan = async (req, res) => {
     if (filter === "harian") {
       // Group by DAYNAME for current week
       const penjualan = await prisma.$queryRaw`
-        SELECT DAYNAME(tgl_transaksi) AS label,
+        SELECT ELT(DAYOFWEEK(tgl_transaksi), 'Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu') AS label,
           SUM(total_transaksi) AS penjualan,
           SUM(GREATEST(0, IF(status_pembayaran = '1', total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = t_transaksi_keluar.id), 0), 0))) AS belum_dibayar
         FROM t_transaksi_keluar
         WHERE YEARWEEK(tgl_transaksi, 1) = YEARWEEK(CURRENT_DATE(), 1)
-        GROUP BY DAYNAME(tgl_transaksi)
+        GROUP BY label
       `;
       const pengeluaran = await prisma.$queryRaw`
-        SELECT DAYNAME(tgl_transaksi) AS label, SUM(total_transaksi) AS pengeluaran
+        SELECT ELT(DAYOFWEEK(tgl_transaksi), 'Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu') AS label, SUM(total_transaksi) AS pengeluaran
         FROM t_transaksi_masuk
         WHERE YEARWEEK(tgl_transaksi, 1) = YEARWEEK(CURRENT_DATE(), 1)
-        GROUP BY DAYNAME(tgl_transaksi)
+        GROUP BY label
       `;
       const oprasional = await prisma.$queryRaw`
-        SELECT DAYNAME(COALESCE(tanggal, created_at)) AS label, SUM(jml_biaya) AS pengeluaran
+        SELECT ELT(DAYOFWEEK(COALESCE(tanggal, created_at)), 'Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu') AS label, SUM(jml_biaya) AS pengeluaran
         FROM t_oprasional
         WHERE YEARWEEK(COALESCE(tanggal, created_at), 1) = YEARWEEK(CURRENT_DATE(), 1)
-        GROUP BY DAYNAME(COALESCE(tanggal, created_at))
+        GROUP BY label
       `;
       const labels = [
         "Senin",
@@ -178,9 +178,9 @@ exports.getChartPenjualan = async (req, res) => {
         "Minggu",
       ];
       data = labels.map((label) => {
-        const pen = penjualan.find((x) => x.label === label);
-        const peng = pengeluaran.find((x) => x.label === label);
-        const opr = oprasional.find((x) => x.label === label);
+        const pen = penjualan.find((x) => x.label != null && String(x.label) === String(label));
+        const peng = pengeluaran.find((x) => x.label != null && String(x.label) === String(label));
+        const opr = oprasional.find((x) => x.label != null && String(x.label) === String(label));
         return {
           label,
           penjualan: Number(pen?.penjualan || 0),
@@ -218,11 +218,12 @@ exports.getChartPenjualan = async (req, res) => {
         "Minggu 3",
         "Minggu 4",
         "Minggu 5",
+        "Minggu 6",
       ];
       data = mingguLabels.map((label) => {
-        const pen = penjualan.find((x) => x.label === label);
-        const peng = pengeluaran.find((x) => x.label === label);
-        const opr = oprasional.find((x) => x.label === label);
+        const pen = penjualan.find((x) => x.label != null && String(x.label) === String(label));
+        const peng = pengeluaran.find((x) => x.label != null && String(x.label) === String(label));
+        const opr = oprasional.find((x) => x.label != null && String(x.label) === String(label));
         return {
           label,
           penjualan: Number(pen?.penjualan || 0),
@@ -258,11 +259,13 @@ exports.getChartPenjualan = async (req, res) => {
           ...pengeluaran.map((x) => x.label),
           ...oprasional.map((x) => x.label),
         ]),
-      ].sort();
+      ]
+        .filter((label) => label !== null && label !== undefined && label !== "")
+        .sort((a, b) => Number(a) - Number(b));
       data = tahunLabels.map((label) => {
-        const pen = penjualan.find((x) => x.label === label);
-        const peng = pengeluaran.find((x) => x.label === label);
-        const opr = oprasional.find((x) => x.label === label);
+        const pen = penjualan.find((x) => x.label != null && String(x.label) === String(label));
+        const peng = pengeluaran.find((x) => x.label != null && String(x.label) === String(label));
+        const opr = oprasional.find((x) => x.label != null && String(x.label) === String(label));
         return {
           label: String(label),
           penjualan: Number(pen?.penjualan || 0),
@@ -274,7 +277,7 @@ exports.getChartPenjualan = async (req, res) => {
     } else {
       // Default: bulanan (group by month in current year)
       const penjualan = await prisma.$queryRaw`
-        SELECT MONTHNAME(tgl_transaksi) AS label,
+        SELECT ELT(MONTH(tgl_transaksi), 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des') AS label,
           SUM(total_transaksi) AS penjualan,
           SUM(GREATEST(0, IF(status_pembayaran = '1', total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = t_transaksi_keluar.id), 0), 0))) AS belum_dibayar
         FROM t_transaksi_keluar
@@ -283,14 +286,14 @@ exports.getChartPenjualan = async (req, res) => {
         ORDER BY MONTH(tgl_transaksi)
       `;
       const pengeluaran = await prisma.$queryRaw`
-        SELECT MONTHNAME(tgl_transaksi) AS label, SUM(total_transaksi) AS pengeluaran
+        SELECT ELT(MONTH(tgl_transaksi), 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des') AS label, SUM(total_transaksi) AS pengeluaran
         FROM t_transaksi_masuk
         WHERE YEAR(tgl_transaksi) = YEAR(CURRENT_DATE())
         GROUP BY MONTH(tgl_transaksi)
         ORDER BY MONTH(tgl_transaksi)
       `;
       const oprasional = await prisma.$queryRaw`
-        SELECT MONTHNAME(COALESCE(tanggal, created_at)) AS label, SUM(jml_biaya) AS pengeluaran
+        SELECT ELT(MONTH(COALESCE(tanggal, created_at)), 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des') AS label, SUM(jml_biaya) AS pengeluaran
         FROM t_oprasional
         WHERE YEAR(COALESCE(tanggal, created_at)) = YEAR(CURRENT_DATE())
         GROUP BY MONTH(COALESCE(tanggal, created_at))
@@ -312,9 +315,9 @@ exports.getChartPenjualan = async (req, res) => {
       ];
       data = bulanLabels.map((label) => {
         // Cari label yang diawali nama bulan (karena MONTHNAME bisa "May" dll)
-        const pen = penjualan.find((x) => x.label.startsWith(label));
-        const peng = pengeluaran.find((x) => x.label.startsWith(label));
-        const opr = oprasional.find((x) => x.label.startsWith(label));
+        const pen = penjualan.find((x) => x.label != null && String(x.label).startsWith(label));
+        const peng = pengeluaran.find((x) => x.label != null && String(x.label).startsWith(label));
+        const opr = oprasional.find((x) => x.label != null && String(x.label).startsWith(label));
         return {
           label,
           penjualan: Number(pen?.penjualan || 0),
@@ -400,7 +403,7 @@ exports.getDataPelanggan = async (req, res) => {
 
 exports.getJatuhTempoPiutang = async (req, res) => {
   try {
-    const transaksiKeluar = await prisma.$queryRaw`
+    const transaksiKeluarRaw = await prisma.$queryRaw`
       SELECT b.id AS id, b.id AS nomorTransaksi, c.nama AS pelanggan, b.total_transaksi AS totalHarga, DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) AS hariHitung,
       IF(
               DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) < 3,
@@ -418,7 +421,7 @@ exports.getJatuhTempoPiutang = async (req, res) => {
       LEFT JOIN (SELECT * FROM t_pelanggan) AS c ON b.id_pelanggan=c.id
       `;
 
-    const transaksiMasuk = await prisma.$queryRaw`
+    const transaksiMasukRaw = await prisma.$queryRaw`
     SELECT b.id AS id, b.id AS nomorTransaksi, c.nama AS pelanggan, b.total_transaksi AS totalHarga, DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) AS hariHitung,
       IF(
               DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) < 3,
@@ -436,25 +439,59 @@ exports.getJatuhTempoPiutang = async (req, res) => {
       LEFT JOIN (SELECT * FROM t_supplier) AS c ON b.id_supplier=c.id  
       `;
 
-    const datatransaksiKeluar = (transaksiKeluar || []).map((row) => ({
-      id: row.id,
-      nomorTransaksi: row.nomorTransaksi,
-      pelanggan: row.pelanggan,
-      totalHarga: Number(row.totalHarga),
-      hariHitung: Number(row.hariHitung),
-      status: row.status,
-      tanggalJatuhTempo: row.tanggalJatuhTempo,
-    }));
+    const idsKeluar = (transaksiKeluarRaw || []).map(r => Number(r.id)).filter(id => id > 0);
+    const idsMasuk = (transaksiMasukRaw || []).map(r => Number(r.id)).filter(id => id > 0);
 
-    const datatransaksiMasuk = (transaksiMasuk || []).map((row) => ({
-      id: row.id,
-      nomorTransaksi: row.nomorTransaksi,
-      pelanggan: row.pelanggan,
-      totalHarga: Number(row.totalHarga),
-      hariHitung: Number(row.hariHitung),
-      status: row.status,
-      tanggalJatuhTempo: row.tanggalJatuhTempo,
-    }));
+    let validIdsKeluar = new Set();
+    let validIdsMasuk = new Set();
+
+    if (idsKeluar.length > 0) {
+      const detailsKeluar = await prisma.t_transaksi_keluar_detail.findMany({
+        where: { id_transaksi_keluar: { in: idsKeluar } },
+        select: { id_transaksi_keluar: true, jml_yard: true, jml_yard_retur: true, jml_rol: true, jml_rol_retur: true },
+      });
+      for (const d of detailsKeluar) {
+        if (Number(d.jml_yard) > Number(d.jml_yard_retur) || Number(d.jml_rol) > Number(d.jml_rol_retur)) {
+          validIdsKeluar.add(Number(d.id_transaksi_keluar));
+        }
+      }
+    }
+
+    if (idsMasuk.length > 0) {
+      const detailsMasuk = await prisma.t_transaksi_masuk_detail.findMany({
+        where: { id_transaksi_masuk: { in: idsMasuk } },
+        select: { id_transaksi_masuk: true, jml_yard: true, jml_yard_retur: true, jml_rol: true, jml_rol_retur: true },
+      });
+      for (const d of detailsMasuk) {
+        if (Number(d.jml_yard) > Number(d.jml_yard_retur) || Number(d.jml_rol) > Number(d.jml_rol_retur)) {
+          validIdsMasuk.add(Number(d.id_transaksi_masuk));
+        }
+      }
+    }
+
+    const datatransaksiKeluar = (transaksiKeluarRaw || [])
+      .filter(row => validIdsKeluar.has(Number(row.id)))
+      .map((row) => ({
+        id: row.id,
+        nomorTransaksi: row.nomorTransaksi,
+        pelanggan: row.pelanggan,
+        totalHarga: Number(row.totalHarga),
+        hariHitung: Number(row.hariHitung),
+        status: row.status,
+        tanggalJatuhTempo: row.tanggalJatuhTempo,
+      }));
+
+    const datatransaksiMasuk = (transaksiMasukRaw || [])
+      .filter(row => validIdsMasuk.has(Number(row.id)))
+      .map((row) => ({
+        id: row.id,
+        nomorTransaksi: row.nomorTransaksi,
+        pelanggan: row.pelanggan,
+        totalHarga: Number(row.totalHarga),
+        hariHitung: Number(row.hariHitung),
+        status: row.status,
+        tanggalJatuhTempo: row.tanggalJatuhTempo,
+      }));
 
     return res
       .status(200)
