@@ -404,43 +404,71 @@ exports.getDataPelanggan = async (req, res) => {
 exports.getJatuhTempoPiutang = async (req, res) => {
   try {
     const transaksiKeluarRaw = await prisma.$queryRaw`
-      SELECT b.id AS id, b.id AS nomorTransaksi, c.nama AS pelanggan, b.total_transaksi AS totalHarga,
-      (b.total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = b.id), 0)) AS sisaTagihan,
-      DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) AS hariHitung,
-      IF(
-              DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) < 3,
-              'Urgent',
-              IF(
-                  DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) < 7,
-                  'Segera',
-                  'Normal'
-              )
-      )
-      AS STATUS, tgl_jatuh_tempo_awal AS tanggalJatuhTempo FROM (
-      SELECT id, id_transaksi, MIN(tgl_jatuh_tempo) AS tgl_jatuh_tempo_awal FROM t_berjangka_keluar WHERE  jml_bayar = 0 GROUP BY id_transaksi
-      ) AS a
-      LEFT JOIN (SELECT * FROM t_transaksi_keluar) AS b ON a.id_transaksi=b.id
-      LEFT JOIN (SELECT * FROM t_pelanggan) AS c ON b.id_pelanggan=c.id
+      SELECT
+        b.id AS id,
+        b.id AS nomorTransaksi,
+        c.nama AS pelanggan,
+        b.total_transaksi AS totalHarga,
+        (b.total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = b.id), 0)) AS sisaTagihan,
+        DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) AS hariHitung,
+        IF(
+          DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) IS NULL,
+          'Normal',
+          IF(
+            DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) < 3,
+            'Urgent',
+            IF(
+              DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) < 7,
+              'Segera',
+              'Normal'
+            )
+          )
+        ) AS status,
+        a.tgl_jatuh_tempo_awal AS tanggalJatuhTempo
+      FROM t_transaksi_keluar AS b
+      LEFT JOIN (
+        SELECT id_transaksi, MIN(tgl_jatuh_tempo) AS tgl_jatuh_tempo_awal
+        FROM t_berjangka_keluar
+        WHERE jml_bayar = 0
+        GROUP BY id_transaksi
+      ) AS a ON b.id = a.id_transaksi
+      LEFT JOIN t_pelanggan AS c ON b.id_pelanggan = c.id
+      WHERE b.status_pembayaran = '1'
+        AND (b.total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = b.id), 0)) > 0
       `;
 
     const transaksiMasukRaw = await prisma.$queryRaw`
-    SELECT b.id AS id, b.id AS nomorTransaksi, c.nama AS pelanggan, b.total_transaksi AS totalHarga,
-      (b.total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_masuk WHERE id_transaksi = b.id), 0)) AS sisaTagihan,
-      DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) AS hariHitung,
-      IF(
-              DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) < 3,
-              'Urgent',
-              IF(
-                  DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) < 7,
-                  'Segera',
-                  'Normal'
-              )
-      )
-      AS status, tgl_jatuh_tempo_awal AS tanggalJatuhTempo FROM (
-      SELECT id, id_transaksi, MIN(tgl_jatuh_tempo) AS tgl_jatuh_tempo_awal FROM t_berjangka_masuk WHERE  jml_bayar = 0 GROUP BY id_transaksi
-      ) AS a
-      LEFT JOIN (SELECT * FROM t_transaksi_masuk) AS b ON a.id_transaksi=b.id
-      LEFT JOIN (SELECT * FROM t_supplier) AS c ON b.id_supplier=c.id  
+      SELECT
+        b.id AS id,
+        b.id AS nomorTransaksi,
+        c.nama AS pelanggan,
+        b.total_transaksi AS totalHarga,
+        (b.total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_masuk WHERE id_transaksi = b.id), 0)) AS sisaTagihan,
+        DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) AS hariHitung,
+        IF(
+          DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) IS NULL,
+          'Normal',
+          IF(
+            DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) < 3,
+            'Urgent',
+            IF(
+              DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) < 7,
+              'Segera',
+              'Normal'
+            )
+          )
+        ) AS status,
+        a.tgl_jatuh_tempo_awal AS tanggalJatuhTempo
+      FROM t_transaksi_masuk AS b
+      LEFT JOIN (
+        SELECT id_transaksi, MIN(tgl_jatuh_tempo) AS tgl_jatuh_tempo_awal
+        FROM t_berjangka_masuk
+        WHERE jml_bayar = 0
+        GROUP BY id_transaksi
+      ) AS a ON b.id = a.id_transaksi
+      LEFT JOIN t_supplier AS c ON b.id_supplier = c.id
+      WHERE b.status_pembayaran = '1'
+        AND (b.total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_masuk WHERE id_transaksi = b.id), 0)) > 0
       `;
 
     const idsKeluar = (transaksiKeluarRaw || []).map(r => Number(r.id)).filter(id => id > 0);
@@ -481,7 +509,7 @@ exports.getJatuhTempoPiutang = async (req, res) => {
         pelanggan: row.pelanggan,
         totalHarga: Number(row.totalHarga),
         sisaTagihan: Number(row.sisaTagihan),
-        hariHitung: Number(row.hariHitung),
+        hariHitung: row.hariHitung !== null && row.hariHitung !== undefined ? Number(row.hariHitung) : null,
         status: row.status,
         tanggalJatuhTempo: row.tanggalJatuhTempo,
       }));
@@ -494,7 +522,7 @@ exports.getJatuhTempoPiutang = async (req, res) => {
         pelanggan: row.pelanggan,
         totalHarga: Number(row.totalHarga),
         sisaTagihan: Number(row.sisaTagihan),
-        hariHitung: Number(row.hariHitung),
+        hariHitung: row.hariHitung !== null && row.hariHitung !== undefined ? Number(row.hariHitung) : null,
         status: row.status,
         tanggalJatuhTempo: row.tanggalJatuhTempo,
       }));
