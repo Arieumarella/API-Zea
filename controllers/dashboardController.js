@@ -404,7 +404,9 @@ exports.getDataPelanggan = async (req, res) => {
 exports.getJatuhTempoPiutang = async (req, res) => {
   try {
     const transaksiKeluarRaw = await prisma.$queryRaw`
-      SELECT b.id AS id, b.id AS nomorTransaksi, c.nama AS pelanggan, b.total_transaksi AS totalHarga, DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) AS hariHitung,
+      SELECT b.id AS id, b.id AS nomorTransaksi, c.nama AS pelanggan, b.total_transaksi AS totalHarga,
+      (b.total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = b.id), 0)) AS sisaTagihan,
+      DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) AS hariHitung,
       IF(
               DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) < 3,
               'Urgent',
@@ -422,7 +424,9 @@ exports.getJatuhTempoPiutang = async (req, res) => {
       `;
 
     const transaksiMasukRaw = await prisma.$queryRaw`
-    SELECT b.id AS id, b.id AS nomorTransaksi, c.nama AS pelanggan, b.total_transaksi AS totalHarga, DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) AS hariHitung,
+    SELECT b.id AS id, b.id AS nomorTransaksi, c.nama AS pelanggan, b.total_transaksi AS totalHarga,
+      (b.total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_masuk WHERE id_transaksi = b.id), 0)) AS sisaTagihan,
+      DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) AS hariHitung,
       IF(
               DATEDIFF(a.tgl_jatuh_tempo_awal, CURDATE()) < 3,
               'Urgent',
@@ -476,6 +480,7 @@ exports.getJatuhTempoPiutang = async (req, res) => {
         nomorTransaksi: row.nomorTransaksi,
         pelanggan: row.pelanggan,
         totalHarga: Number(row.totalHarga),
+        sisaTagihan: Number(row.sisaTagihan),
         hariHitung: Number(row.hariHitung),
         status: row.status,
         tanggalJatuhTempo: row.tanggalJatuhTempo,
@@ -488,6 +493,7 @@ exports.getJatuhTempoPiutang = async (req, res) => {
         nomorTransaksi: row.nomorTransaksi,
         pelanggan: row.pelanggan,
         totalHarga: Number(row.totalHarga),
+        sisaTagihan: Number(row.sisaTagihan),
         hariHitung: Number(row.hariHitung),
         status: row.status,
         tanggalJatuhTempo: row.tanggalJatuhTempo,
