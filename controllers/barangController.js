@@ -90,11 +90,13 @@ exports.createBarang = async (req, res) => {
         .json({ status: false, message: "kd_barang sudah digunakan" });
     }
 
+    const foto = req.file ? req.file.filename : null;
     const barang = await prisma.t_barang.create({
       data: {
         kd_barang: kdClean,
         nama_barang,
         jml_yard: 0,
+        foto: foto,
         created_at: new Date(),
         updated_at: new Date(),
       },
@@ -148,6 +150,12 @@ exports.updateBarang = async (req, res) => {
         }
       }
       dataToUpdate.kd_barang = kdClean;
+    }
+
+    if (req.file) {
+      dataToUpdate.foto = req.file.filename;
+    } else if (req.body.hapus_foto === "true") {
+      dataToUpdate.foto = null;
     }
 
     const updatedBarang = await prisma.t_barang.update({
@@ -229,8 +237,16 @@ exports.detilKeluar = async (req, res) => {
     const id = parseInt(req.params.id);
 
     const detailListBarang = await prisma.$queryRaw`
-      SELECT 'Barang Keluar' AS sts_barang, tgl_transaksi, jml_yard, jml_rol, harga_satuan, jml_yard*harga_satuan AS total_harga FROM (
-      SELECT * FROM t_transaksi_keluar_detail WHERE id_barang=${id}
+      SELECT 
+        'Barang Keluar' AS sts_barang, 
+        tgl_transaksi, 
+        (jml_yard - COALESCE(jml_yard_retur, 0)) AS jml_yard, 
+        (jml_rol - COALESCE(jml_rol_retur, 0)) AS jml_rol, 
+        harga_satuan, 
+        (jml_yard - COALESCE(jml_yard_retur, 0)) * harga_satuan AS total_harga,
+        a.id_transaksi_keluar AS id_transaksi
+      FROM (
+        SELECT * FROM t_transaksi_keluar_detail WHERE id_barang=${id}
       ) AS a
       LEFT JOIN t_transaksi_keluar AS b ON a.id_transaksi_keluar=b.id
       ORDER BY tgl_transaksi DESC  
@@ -243,6 +259,7 @@ exports.detilKeluar = async (req, res) => {
       jml_rol: Number(row.jml_rol),
       harga_satuan: Number(row.harga_satuan),
       total_harga: Number(row.total_harga),
+      id_transaksi: Number(row.id_transaksi),
     }));
 
     return res.status(200).json({ status: true, data: datatransaksiKeluar });
@@ -257,8 +274,16 @@ exports.detilMasuk = async (req, res) => {
     const id = parseInt(req.params.id);
 
     const detailListBarang = await prisma.$queryRaw`
-      SELECT 'Barang Masuk' AS sts_barang, tgl_transaksi, jml_yard, jml_rol, harga_satuan, jml_yard*harga_satuan AS total_harga FROM (
-      SELECT * FROM t_transaksi_masuk_detail WHERE id_barang=${id}
+      SELECT 
+        'Barang Masuk' AS sts_barang, 
+        tgl_transaksi, 
+        (jml_yard - COALESCE(jml_yard_retur, 0)) AS jml_yard, 
+        (jml_rol - COALESCE(jml_rol_retur, 0)) AS jml_rol, 
+        harga_satuan, 
+        (jml_yard - COALESCE(jml_yard_retur, 0)) * harga_satuan AS total_harga,
+        a.id_transaksi_masuk AS id_transaksi
+      FROM (
+        SELECT * FROM t_transaksi_masuk_detail WHERE id_barang=${id}
       ) AS a
       LEFT JOIN t_transaksi_masuk AS b ON a.id_transaksi_masuk=b.id
       ORDER BY tgl_transaksi DESC  
@@ -271,6 +296,7 @@ exports.detilMasuk = async (req, res) => {
       jml_rol: Number(row.jml_rol),
       harga_satuan: Number(row.harga_satuan),
       total_harga: Number(row.total_harga),
+      id_transaksi: Number(row.id_transaksi),
     }));
 
     return res.status(200).json({ status: true, data: datatransaksiKeluar });
@@ -312,6 +338,7 @@ exports.stockBarang = async (req, res) => {
         nama_barang: true,
         jml_yard: true,
         jml_rol: true,
+        foto: true,
         created_at: true,
         updated_at: true,
       },
@@ -354,6 +381,7 @@ exports.stockBarang = async (req, res) => {
         jml_rol: Number(row.jml_rol || 0),
         tot_yard_terjual: sold.tot_yard_terjual,
         tot_rol_terjual: sold.tot_rol_terjual,
+        foto: row.foto,
         created_at: row.created_at,
         updated_at: row.updated_at,
       };

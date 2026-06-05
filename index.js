@@ -54,6 +54,9 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const path = require("path");
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 // Router
 const authRouter = require("./routes/authRouter.js");
 const userRouter = require("./routes/userRouter.js");

@@ -3,8 +3,8 @@ const prisma = new PrismaClient();
 
 exports.getSaldo = async (req, res) => {
   try {
-    const saldo = await prisma.t_saldo.findUnique({
-      where: { id: 1 },
+    const saldo = await prisma.t_saldo.findFirst({
+      orderBy: { id: "asc" },
     });
 
     if (!saldo) {

@@ -13,6 +13,7 @@ model t_barang {
   nama_barang String?   @db.VarChar(255)
   jml_yard    Decimal?  @db.Decimal(12, 2)
   jml_rol     Decimal?  @db.Decimal(12, 2)
+  foto        String?   @db.VarChar(255)
   created_at  DateTime? @db.DateTime(0)
   updated_at  DateTime? @db.DateTime(0)
 }
@@ -105,6 +106,7 @@ model t_transaksi_keluar {
   tipe_ppn          String?   @db.VarChar(255)
   jml_ppn           Decimal?  @db.Decimal(15, 2)
   catatan           String?   @db.Text
+  nota              String?   @db.VarChar(255)
   created_at        DateTime? @db.DateTime(0)
   updated_at        DateTime? @db.DateTime(0)
 }
@@ -136,6 +138,7 @@ model t_transaksi_masuk {
   tipe_ppn          String?   @db.VarChar(255)
   jml_ppn           Decimal?  @db.Decimal(15, 2)
   catatan           String?   @db.Text
+  nota              String?   @db.VarChar(255)
   created_at        DateTime? @db.DateTime(0)
   updated_at        DateTime? @db.DateTime(0)
 }

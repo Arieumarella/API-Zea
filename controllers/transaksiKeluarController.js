@@ -4,19 +4,21 @@ const prisma = new PrismaClient();
 // Create transaksi keluar with details
 exports.createTransaksiKeluar = async (req, res) => {
   try {
-    const {
-      id_pelanggan,
-      tgl_transaksi,
-      tipe_discount,
-      jml_discount,
-      tipe_ppn,
-      jml_ppn,
-      catatan,
-      details,
-      status_pembayaran,
-      tenor,
-      tanggal_tenor,
-    } = req.body;
+    const detailsRaw = req.body.details;
+    const details = typeof detailsRaw === "string" ? JSON.parse(detailsRaw) : detailsRaw;
+
+    const tglTenorRaw = req.body.tanggal_tenor;
+    const tanggal_tenor = typeof tglTenorRaw === "string" ? JSON.parse(tglTenorRaw) : tglTenorRaw;
+
+    const id_pelanggan = req.body.id_pelanggan ? parseInt(req.body.id_pelanggan, 10) : null;
+    const tgl_transaksi = req.body.tgl_transaksi;
+    const tipe_discount = req.body.tipe_discount;
+    const jml_discount = req.body.jml_discount ? Number(req.body.jml_discount) : 0;
+    const tipe_ppn = req.body.tipe_ppn;
+    const jml_ppn = req.body.jml_ppn ? Number(req.body.jml_ppn) : 0;
+    const catatan = req.body.catatan;
+    const status_pembayaran = req.body.status_pembayaran;
+    const tenor = req.body.tenor ? parseInt(req.body.tenor, 10) : null;
 
     console.log(req.body);
 
@@ -80,6 +82,7 @@ exports.createTransaksiKeluar = async (req, res) => {
 
     // Use transaction to ensure atomicity
     const result = await prisma.$transaction(async (tx) => {
+      const nota = req.file ? req.file.filename : null;
       // create parent transaksi
       const trx = await tx.t_transaksi_keluar.create({
         data: {
@@ -94,6 +97,7 @@ exports.createTransaksiKeluar = async (req, res) => {
           tipe_ppn: tipe_ppn || null,
           jml_ppn: ppnVal || null,
           catatan: catatan || null,
+          nota: nota,
           created_at: new Date(),
           updated_at: new Date(),
         },
@@ -145,16 +149,16 @@ exports.createTransaksiKeluar = async (req, res) => {
         }
       }
 
-      // Tambah t_saldo.id = 1 sebesar total transaksi (kebalikan dari masuk, karena asumsi ada pembelian)
+      // Tambah t_saldo sebesar total transaksi (kebalikan dari masuk, karena asumsi ada penjualan)
       if (status_pembayaran != "1") {
         try {
-          const saldoRec = await tx.t_saldo.findUnique({ where: { id: 1 } });
+          const saldoRec = await tx.t_saldo.findFirst({ orderBy: { id: "asc" } });
           if (saldoRec) {
             const currentSaldo =
               saldoRec.jml_saldo != null ? Number(saldoRec.jml_saldo) : 0;
             const newSaldo = currentSaldo + computedTotal;
             await tx.t_saldo.update({
-              where: { id: 1 },
+              where: { id: saldoRec.id },
               data: { jml_saldo: newSaldo, updated_at: new Date() },
             });
           } else {
@@ -424,6 +428,7 @@ exports.getTransaksiKeluar = async (req, res) => {
       total_transaksi:
         item.total_transaksi != null ? Number(item.total_transaksi) : 0,
       penginput: item.id_user ? userMap[item.id_user] || null : null,
+      nota: item.nota,
       details: detailsMap[item.id] || [],
       berjangka: berjangkaMap[item.id] || [],
       created_at: item.created_at,
@@ -446,22 +451,22 @@ exports.getTransaksiKeluar = async (req, res) => {
 // Update transaksi keluar
 exports.updateTransaksiKeluar = async (req, res) => {
   try {
-    console.log(req.body);
-
     const id = parseInt(req.params.id);
-    const {
-      id_pelanggan,
-      tgl_transaksi,
-      tipe_discount,
-      jml_discount,
-      tipe_ppn,
-      jml_ppn,
-      catatan,
-      details,
-      status_pembayaran,
-      tenor,
-      tanggal_tenor,
-    } = req.body;
+    const detailsRaw = req.body.details;
+    const details = typeof detailsRaw === "string" ? JSON.parse(detailsRaw) : detailsRaw;
+
+    const tglTenorRaw = req.body.tanggal_tenor;
+    const tanggal_tenor = typeof tglTenorRaw === "string" ? JSON.parse(tglTenorRaw) : tglTenorRaw;
+
+    const id_pelanggan = req.body.id_pelanggan ? parseInt(req.body.id_pelanggan, 10) : null;
+    const tgl_transaksi = req.body.tgl_transaksi;
+    const tipe_discount = req.body.tipe_discount;
+    const jml_discount = req.body.jml_discount ? Number(req.body.jml_discount) : 0;
+    const tipe_ppn = req.body.tipe_ppn;
+    const jml_ppn = req.body.jml_ppn ? Number(req.body.jml_ppn) : 0;
+    const catatan = req.body.catatan;
+    const status_pembayaran = req.body.status_pembayaran;
+    const tenor = req.body.tenor ? parseInt(req.body.tenor, 10) : null;
 
     // Validasi
     if (!Array.isArray(details) || details.length === 0) {
@@ -532,6 +537,20 @@ exports.updateTransaksiKeluar = async (req, res) => {
 
     // Gunakan transaction untuk update atomik
     const result = await prisma.$transaction(async (tx) => {
+      // Ambil jumlah pembayaran yang sudah diterima sebelumnya (untuk update saldo)
+      let oldAmountReceived = 0;
+      if (oldTrx.status_pembayaran !== "1") {
+        oldAmountReceived = oldTotal;
+      } else {
+        const oldInstallments = await tx.t_berjangka_keluar.findMany({
+          where: { id_transaksi: id },
+        });
+        oldAmountReceived = oldInstallments.reduce(
+          (sum, inst) => sum + (inst.jml_bayar != null ? Number(inst.jml_bayar) : 0),
+          0
+        );
+      }
+
       // Tenor dan pembayaran bertempo
       if (status_pembayaran === "1") {
         // Ambil semua berjangka (baik yang sudah dibayar maupun belum)
@@ -637,24 +656,6 @@ exports.updateTransaksiKeluar = async (req, res) => {
         }
       }
 
-      // Update parent transaksi
-      const updatedTrx = await tx.t_transaksi_keluar.update({
-        where: { id },
-        data: {
-          id_pelanggan: id_pelanggan || null,
-          tgl_transaksi: new Date(tgl_transaksi),
-          total_transaksi: computedTotal,
-          status_pembayaran: status_pembayaran || "",
-          tenor: Number(tenor) || null,
-          tipe_discount: tipe_discount || null,
-          jml_discount: discVal || null,
-          tipe_ppn: tipe_ppn || null,
-          jml_ppn: ppnVal || null,
-          catatan: catatan || null,
-          updated_at: new Date(),
-        },
-      });
-
       // Ambil detail lama untuk rollback stok (dan untuk fallback nilai retur jika tidak dikirim kembali)
       const oldDetails = await tx.t_transaksi_keluar_detail.findMany({
         where: { id_transaksi_keluar: id },
@@ -686,6 +687,71 @@ exports.updateTransaksiKeluar = async (req, res) => {
       // Will record which old detail id (if any) was chosen as fallback for each incoming detail index
       const chosenOldDetailByIndex = [];
 
+      // Precompute total return amount from incoming details (use old detail retur when incoming omits it)
+      let totalNewReturnAmount = 0;
+      for (let idx = 0; idx < details.length; idx++) {
+        const d = details[idx];
+        const harga_satuan =
+          d.harga_satuan != null ? Number(d.harga_satuan) : 0;
+        const detailId = d.id ? parseInt(d.id, 10) : null;
+        const incomingYardRetur =
+          d.jml_yard_retur !== undefined && d.jml_yard_retur !== null
+            ? Number(d.jml_yard_retur)
+            : null;
+
+        let jml_yard_retur = 0;
+        // Prefer incoming explicit value
+        if (incomingYardRetur !== null) {
+          jml_yard_retur = incomingYardRetur;
+          chosenOldDetailByIndex[idx] = detailId || null;
+        } else if (detailId && oldDetailById[detailId]) {
+          // If incoming didn't specify, but client referenced existing detail by id, use its old retur
+          jml_yard_retur = Number(oldDetailById[detailId].jml_yard_retur || 0);
+          chosenOldDetailByIndex[idx] = detailId;
+        } else if (
+          d.id_barang &&
+          oldDetailsByBarang[d.id_barang] &&
+          oldDetailsByBarang[d.id_barang].length > 0
+        ) {
+          // No id provided: try to match by id_barang (consume one old detail for that barang)
+          const match = oldDetailsByBarang[d.id_barang].shift();
+          jml_yard_retur = Number(match.jml_yard_retur || 0);
+          chosenOldDetailByIndex[idx] = match.id;
+        } else {
+          jml_yard_retur = 0;
+          chosenOldDetailByIndex[idx] = null;
+        }
+
+        totalNewReturnAmount += harga_satuan * (jml_yard_retur || 0);
+      }
+      const adjustedComputedTotal = computedTotal - totalNewReturnAmount;
+
+      let nota = undefined;
+      if (req.file) {
+        nota = req.file.filename;
+      } else if (req.body.hapus_nota === "true") {
+        nota = null;
+      }
+
+      // Update parent transaksi
+      const updatedTrx = await tx.t_transaksi_keluar.update({
+        where: { id },
+        data: {
+          id_pelanggan: id_pelanggan || null,
+          tgl_transaksi: new Date(tgl_transaksi),
+          total_transaksi: adjustedComputedTotal,
+          status_pembayaran: status_pembayaran || "",
+          tenor: Number(tenor) || null,
+          tipe_discount: tipe_discount || null,
+          jml_discount: discVal || null,
+          tipe_ppn: tipe_ppn || null,
+          jml_ppn: ppnVal || null,
+          catatan: catatan || null,
+          ...(nota !== undefined ? { nota } : {}),
+          updated_at: new Date(),
+        },
+      });
+
       // Rollback stok dan rol dari detail lama (add back karena sebelumnya dikurangi)
       for (const oldD of oldDetails) {
         if (oldD.id_barang) {
@@ -697,8 +763,10 @@ exports.updateTransaksiKeluar = async (req, res) => {
               existing.jml_yard != null ? Number(existing.jml_yard) : 0;
             const currentRol =
               existing.jml_rol != null ? Number(existing.jml_rol) : 0;
-            const oldYard = oldD.jml_yard != null ? Number(oldD.jml_yard) : 0;
-            const oldRol = oldD.jml_rol != null ? Number(oldD.jml_rol) : 0;
+            const oldYardRetur = oldD.jml_yard_retur != null ? Number(oldD.jml_yard_retur) : 0;
+            const oldRolRetur = oldD.jml_rol_retur != null ? Number(oldD.jml_rol_retur) : 0;
+            const oldYard = (oldD.jml_yard != null ? Number(oldD.jml_yard) : 0) - oldYardRetur;
+            const oldRol = (oldD.jml_rol != null ? Number(oldD.jml_rol) : 0) - oldRolRetur;
 
             await tx.t_barang.update({
               where: { id: oldD.id_barang },
@@ -817,19 +885,29 @@ exports.updateTransaksiKeluar = async (req, res) => {
 
       // oldDetails, oldDetailById and oldReturnedByBarang already prepared above
 
-      // Update saldo jika status pembayaran bukan "1" (bukan berjangka)
-      if (status_pembayaran != "1") {
-        const saldoRec = await tx.t_saldo.findUnique({ where: { id: 1 } });
-        if (saldoRec) {
-          const currentSaldo =
-            saldoRec.jml_saldo != null ? Number(saldoRec.jml_saldo) : 0;
-          // Kurangi saldo lama, tambah saldo baru
-          const newSaldo = currentSaldo - oldTotal + computedTotal;
-          await tx.t_saldo.update({
-            where: { id: 1 },
-            data: { jml_saldo: newSaldo, updated_at: new Date() },
-          });
-        }
+      // Update saldo berdasarkan transisi cashflow tunai/tempo
+      let newAmountReceived = 0;
+      if (status_pembayaran !== "1") {
+        newAmountReceived = adjustedComputedTotal;
+      } else {
+        const remainingBerjangka = await tx.t_berjangka_keluar.findMany({
+          where: { id_transaksi: id },
+        });
+        newAmountReceived = remainingBerjangka.reduce(
+          (sum, inst) => sum + (inst.jml_bayar != null ? Number(inst.jml_bayar) : 0),
+          0
+        );
+      }
+
+      const saldoRec = await tx.t_saldo.findFirst({ orderBy: { id: "asc" } });
+      if (saldoRec) {
+        const currentSaldo =
+          saldoRec.jml_saldo != null ? Number(saldoRec.jml_saldo) : 0;
+        const newSaldo = currentSaldo - oldAmountReceived + newAmountReceived;
+        await tx.t_saldo.update({
+          where: { id: saldoRec.id },
+          data: { jml_saldo: newSaldo, updated_at: new Date() },
+        });
       }
 
       return updatedTrx;
@@ -956,7 +1034,6 @@ exports.getTransaksiKeluarById = async (req, res) => {
       tgl_transaksi: trx.tgl_transaksi,
       status_pembayaran: trx.status_pembayaran,
       tenor: trx.tenor,
-      pelanggan: pelanggan ? { id: pelanggan.id, nama: pelanggan.nama } : null,
       pelanggan: pelanggan
         ? { id: pelanggan.id, nama: pelanggan.nama, no_tlp: pelanggan.no_tlp }
         : null,
@@ -967,6 +1044,7 @@ exports.getTransaksiKeluarById = async (req, res) => {
       tipe_ppn: trx.tipe_ppn,
       jml_ppn: trx.jml_ppn != null ? Number(trx.jml_ppn) : 0,
       catatan: trx.catatan,
+      nota: trx.nota,
       penginput: penginput
         ? {
             id: penginput.id,
@@ -1114,14 +1192,14 @@ exports.updateBerjangkaKeluar = async (req, res) => {
 
       // Update saldo jika ada perubahan pembayaran
       if (totalPaymentChange !== 0) {
-        const saldoRec = await tx.t_saldo.findUnique({ where: { id: 1 } });
+        const saldoRec = await tx.t_saldo.findFirst({ orderBy: { id: "asc" } });
         if (saldoRec) {
           const currentSaldo =
             saldoRec.jml_saldo != null ? Number(saldoRec.jml_saldo) : 0;
           // Tambah saldo sebesar total perubahan pembayaran (kebalikan dari masuk)
           const newSaldo = currentSaldo + totalPaymentChange;
           await tx.t_saldo.update({
-            where: { id: 1 },
+            where: { id: saldoRec.id },
             data: { jml_saldo: newSaldo, updated_at: new Date() },
           });
         }
@@ -1240,10 +1318,14 @@ exports.deleteTransaksiKeluar = async (req, res) => {
               existing.jml_yard != null ? Number(existing.jml_yard) : 0;
             const currentRol =
               existing.jml_rol != null ? Number(existing.jml_rol) : 0;
+            const detailYardRetur =
+              detail.jml_yard_retur != null ? Number(detail.jml_yard_retur) : 0;
+            const detailRolRetur =
+              detail.jml_rol_retur != null ? Number(detail.jml_rol_retur) : 0;
             const detailYard =
-              detail.jml_yard != null ? Number(detail.jml_yard) : 0;
+              (detail.jml_yard != null ? Number(detail.jml_yard) : 0) - detailYardRetur;
             const detailRol =
-              detail.jml_rol != null ? Number(detail.jml_rol) : 0;
+              (detail.jml_rol != null ? Number(detail.jml_rol) : 0) - detailRolRetur;
 
             await tx.t_barang.update({
               where: { id: detail.id_barang },
@@ -1258,7 +1340,7 @@ exports.deleteTransaksiKeluar = async (req, res) => {
       }
 
       // Rollback saldo
-      const saldoRec = await tx.t_saldo.findUnique({ where: { id: 1 } });
+      const saldoRec = await tx.t_saldo.findFirst({ orderBy: { id: "asc" } });
       if (saldoRec) {
         const currentSaldo =
           saldoRec.jml_saldo != null ? Number(saldoRec.jml_saldo) : 0;
@@ -1280,7 +1362,7 @@ exports.deleteTransaksiKeluar = async (req, res) => {
 
         const newSaldo = currentSaldo + saldoAdjustment;
         await tx.t_saldo.update({
-          where: { id: 1 },
+          where: { id: saldoRec.id },
           data: { jml_saldo: newSaldo, updated_at: new Date() },
         });
       }
@@ -1471,14 +1553,14 @@ exports.createReturTransaksiKeluar = async (req, res) => {
       });
 
       // Update t_saldo id=1 dikurangi totalRefundDelta (kebalikan dari masuk: refund berarti saldo turun)
-      const saldoRec = await tx.t_saldo.findUnique({ where: { id: 1 } });
+      const saldoRec = await tx.t_saldo.findFirst({ orderBy: { id: "asc" } });
       if (saldoRec) {
         const currentSaldo =
           saldoRec.jml_saldo != null ? Number(saldoRec.jml_saldo) : 0;
         const newSaldo = currentSaldo - totalRefundDelta;
 
         await tx.t_saldo.update({
-          where: { id: 1 },
+          where: { id: saldoRec.id },
           data: { jml_saldo: newSaldo, updated_at: new Date() },
         });
       } else {

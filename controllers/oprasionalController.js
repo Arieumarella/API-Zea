@@ -98,7 +98,7 @@ exports.createOprasional = async (req, res) => {
     const { nama_baya, jml_biaya, tanggal } = req.body;
     const id_user = req.user.userId;
     // Ambil saldo terakhir
-    const saldo = await prisma.t_saldo.findFirst({ orderBy: { id: "desc" } });
+    const saldo = await prisma.t_saldo.findFirst({ orderBy: { id: "asc" } });
     if (!saldo || Number(saldo.jml_saldo) < Number(jml_biaya)) {
       return res
         .status(400)
@@ -146,7 +146,7 @@ exports.updateOprasional = async (req, res) => {
     // Hitung selisih biaya
     const selisih = Number(jml_biaya) - Number(oprasional.jml_biaya);
     // Ambil saldo terakhir
-    const saldo = await prisma.t_saldo.findFirst({ orderBy: { id: "desc" } });
+    const saldo = await prisma.t_saldo.findFirst({ orderBy: { id: "asc" } });
     if (!saldo) {
       return res
         .status(400)
@@ -204,15 +204,17 @@ exports.deleteOprasional = async (req, res) => {
         .json({ status: false, message: "Oprasional tidak ditemukan" });
     }
     // Kembalikan saldo
-    const saldo = await prisma.t_saldo.findFirst({ orderBy: { id: "desc" } });
-    const newSaldo = Number(saldo.jml_saldo) + Number(oprasional.jml_biaya);
-    await prisma.t_saldo.update({
-      where: { id: saldo.id },
-      data: {
-        jml_saldo: newSaldo,
-        updated_at: new Date(),
-      },
-    });
+    const saldo = await prisma.t_saldo.findFirst({ orderBy: { id: "asc" } });
+    if (saldo) {
+      const newSaldo = Number(saldo.jml_saldo) + Number(oprasional.jml_biaya);
+      await prisma.t_saldo.update({
+        where: { id: saldo.id },
+        data: {
+          jml_saldo: newSaldo,
+          updated_at: new Date(),
+        },
+      });
+    }
     await prisma.t_oprasional.delete({ where: { id } });
     return res
       .status(200)
