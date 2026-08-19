@@ -12,19 +12,45 @@ exports.getOprasional = async (req, res) => {
     const waktuAwal = req.query.waktuAwal
       ? new Date(req.query.waktuAwal)
       : null;
-    const waktuAkhir = req.query.waktuAkhir
-      ? new Date(req.query.waktuAkhir)
-      : null;
+    let waktuAkhir = null;
+    if (req.query.waktuAkhir) {
+      waktuAkhir = new Date(req.query.waktuAkhir);
+      waktuAkhir.setHours(23, 59, 59, 999);
+    }
     let where = {};
     if (search) {
       where.nama_baya = { contains: search };
     }
     if (waktuAwal && waktuAkhir) {
-      where.created_at = { gte: waktuAwal, lte: waktuAkhir };
+      where.OR = [
+        {
+          tanggal: { gte: waktuAwal, lte: waktuAkhir }
+        },
+        {
+          tanggal: null,
+          created_at: { gte: waktuAwal, lte: waktuAkhir }
+        }
+      ];
     } else if (waktuAwal) {
-      where.created_at = { gte: waktuAwal };
+      where.OR = [
+        {
+          tanggal: { gte: waktuAwal }
+        },
+        {
+          tanggal: null,
+          created_at: { gte: waktuAwal }
+        }
+      ];
     } else if (waktuAkhir) {
-      where.created_at = { lte: waktuAkhir };
+      where.OR = [
+        {
+          tanggal: { lte: waktuAkhir }
+        },
+        {
+          tanggal: null,
+          created_at: { lte: waktuAkhir }
+        }
+      ];
     }
     const [oprasional, total] = await Promise.all([
       prisma.t_oprasional.findMany({
