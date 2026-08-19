@@ -1,4 +1,4 @@
-const { PrismaClient } = require("@prisma/client");
+const { PrismaClient, Prisma } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 
@@ -355,7 +355,7 @@ exports.stockBarang = async (req, res) => {
           SUM(COALESCE(jml_yard, 0) - COALESCE(jml_yard_retur, 0)) AS tot_yard,
           SUM(COALESCE(jml_rol, 0) - COALESCE(jml_rol_retur, 0)) AS tot_rol
         FROM t_transaksi_keluar_detail
-        WHERE id_barang IN (${ids.join(",")})
+        WHERE id_barang IN (${Prisma.join(ids)})
         GROUP BY id_barang
       `;
     }
