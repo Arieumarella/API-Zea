@@ -256,9 +256,11 @@ exports.getTransaksiMasuk = async (req, res) => {
     const waktuAwal = req.query.waktuAwal
       ? new Date(req.query.waktuAwal)
       : null;
-    const waktuAkhir = req.query.waktuAkhir
-      ? new Date(req.query.waktuAkhir)
-      : null;
+    let waktuAkhir = null;
+    if (req.query.waktuAkhir) {
+      waktuAkhir = new Date(req.query.waktuAkhir);
+      waktuAkhir.setHours(23, 59, 59, 999);
+    }
 
     let where = {};
     if (supplierId) where.id_supplier = supplierId;
