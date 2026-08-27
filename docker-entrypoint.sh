@@ -55,6 +55,8 @@ else
 fi
 
 npx prisma migrate resolve --applied "20260827145500_add_multi_toko" --schema=./prisma/schema.prisma 2>/dev/null || true
+npx prisma db execute --file ./prisma/migrations/20260827145500_add_multi_toko/migration.sql --schema=./prisma/schema.prisma 2>/dev/null || true
+
 
 echo "=== Applying pending migrations (safe — never deletes data) ==="
 

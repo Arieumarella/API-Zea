@@ -7,7 +7,8 @@ const port = process.env.PORT || 3000;
 // Configure CORS to allow one or multiple origins set in FRONTEND_URL
 // FRONTEND_URL can be a single origin or a comma-separated list of origins.
 // Example: FRONTEND_URL=https://jdih.pu.go.id,http://localhost:5173
-const rawOrigins = process.env.FRONTEND_URL || "";
+const rawOrigins = process.env.FRONTEND_URL || "https://www.zeatextile.cloud,http://localhost:5173,*";
+
 // normalize: trim whitespace and strip trailing slashes
 const allowedOrigins = rawOrigins
   .split(",")
