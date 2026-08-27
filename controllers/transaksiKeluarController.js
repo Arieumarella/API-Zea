@@ -80,12 +80,15 @@ exports.createTransaksiKeluar = async (req, res) => {
     const computedTotal = taxable + ppnAmount;
     console.log(computedTotal);
 
+    const targetTokoId = req.id_toko || 1;
+
     // Use transaction to ensure atomicity
     const result = await prisma.$transaction(async (tx) => {
       const nota = req.file ? req.file.filename : null;
       // create parent transaksi
       const trx = await tx.t_transaksi_keluar.create({
         data: {
+          id_toko: targetTokoId,
           id_pelanggan: id_pelanggan || null,
           id_user: id_user || null,
           tgl_transaksi: new Date(tgl_transaksi),
@@ -152,7 +155,7 @@ exports.createTransaksiKeluar = async (req, res) => {
       // Tambah t_saldo sebesar total transaksi (kebalikan dari masuk, karena asumsi ada penjualan)
       if (status_pembayaran != "1") {
         try {
-          const saldoRec = await tx.t_saldo.findFirst({ orderBy: { id: "asc" } });
+          const saldoRec = await tx.t_saldo.findFirst({ where: { id_toko: targetTokoId }, orderBy: { id: "asc" } });
           if (saldoRec) {
             const currentSaldo =
               saldoRec.jml_saldo != null ? Number(saldoRec.jml_saldo) : 0;
@@ -165,6 +168,7 @@ exports.createTransaksiKeluar = async (req, res) => {
             // jika belum ada record saldo, buat baru dengan nilai positif
             await tx.t_saldo.create({
               data: {
+                id_toko: targetTokoId,
                 jml_saldo: computedTotal,
                 created_at: new Date(),
                 updated_at: new Date(),
@@ -264,8 +268,10 @@ exports.getTransaksiKeluar = async (req, res) => {
       waktuAkhir.setHours(23, 59, 59, 999);
     }
 
-    let where = {};
+    const id_toko = req.id_toko || 1;
+    let where = { id_toko };
     if (pelangganId) where.id_pelanggan = pelangganId;
+
     if (waktuAwal && waktuAkhir)
       where.tgl_transaksi = { gte: waktuAwal, lte: waktuAkhir };
     else if (waktuAwal) where.tgl_transaksi = { gte: waktuAwal };

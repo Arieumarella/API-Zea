@@ -68,6 +68,9 @@ const transaksiMasukRouter = require("./routes/transaksiMasukRouter.js");
 const transaksiKeluarRouter = require("./routes/transaksiKeluarRouter.js");
 const dashboardRouter = require("./routes/dashboardRouter.js");
 const profileRouter = require("./routes/profileRouter.js");
+const tokoRouter = require("./routes/tokoRouter.js");
+const logRouter = require("./routes/logRouter.js");
+
 
 app.use(authRouter);
 app.use(userRouter);
@@ -79,7 +82,11 @@ app.use(transaksiMasukRouter);
 app.use(transaksiKeluarRouter);
 app.use(dashboardRouter);
 app.use(profileRouter);
+app.use(tokoRouter);
+app.use("/log", logRouter);
+
 // Menjalankan server Express.js
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
+

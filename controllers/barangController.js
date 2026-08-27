@@ -1,5 +1,7 @@
 const { PrismaClient, Prisma } = require("@prisma/client");
 const prisma = new PrismaClient();
+const { createLog } = require("../utils/logHelper");
+
 
 
 // Get barang with pagination and search
@@ -9,14 +11,20 @@ exports.getBarang = async (req, res) => {
     const take = 10;
     const skip = (page - 1) * take;
     const search = req.query.search || "";
-    const where = search
-      ? {
-        OR: [
-          { nama_barang: { contains: search } },
-          { kd_barang: { contains: search } },
-        ],
-      }
-      : {};
+    const id_toko = req.id_toko || 1;
+
+    const where = {
+      id_toko,
+      ...(search
+        ? {
+            OR: [
+              { nama_barang: { contains: search } },
+              { kd_barang: { contains: search } },
+            ],
+          }
+        : {}),
+    };
+
     const [barang, total] = await Promise.all([
       prisma.t_barang.findMany({
         skip,
@@ -43,12 +51,13 @@ exports.getBarang = async (req, res) => {
 exports.getBarangById = async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
+    const id_toko = req.id_toko || 1;
     if (isNaN(id)) {
       return res
         .status(400)
         .json({ status: false, message: "Parameter id tidak valid" });
     }
-    const barang = await prisma.t_barang.findUnique({ where: { id } });
+    const barang = await prisma.t_barang.findFirst({ where: { id, id_toko } });
     if (!barang) {
       return res
         .status(404)
@@ -65,13 +74,14 @@ exports.getBarangById = async (req, res) => {
 exports.createBarang = async (req, res) => {
   try {
     const { nama_barang, kd_barang } = req.body;
+    const id_toko = req.id_toko || 1;
+
     if (!nama_barang || nama_barang.trim() === "") {
       return res
         .status(400)
         .json({ status: false, message: "Nama barang wajib diisi" });
     }
 
-    // kd_barang must be provided by the client and must be unique
     if (!kd_barang || String(kd_barang).trim() === "") {
       return res
         .status(400)
@@ -81,18 +91,18 @@ exports.createBarang = async (req, res) => {
     const kdClean = String(kd_barang).trim();
 
     const exists = await prisma.t_barang.findFirst({
-      where: { kd_barang: kdClean },
+      where: { kd_barang: kdClean, id_toko },
     });
-
 
     if (exists) {
       return res.status(400)
-        .json({ status: false, message: "kd_barang sudah digunakan" });
+        .json({ status: false, message: "kd_barang sudah digunakan di toko ini" });
     }
 
     const foto = req.file ? req.file.filename : null;
     const barang = await prisma.t_barang.create({
       data: {
+        id_toko,
         kd_barang: kdClean,
         nama_barang,
         jml_yard: 0,
@@ -101,12 +111,20 @@ exports.createBarang = async (req, res) => {
         updated_at: new Date(),
       },
     });
+    createLog({
+      id_toko,
+      id_user: req.user?.userId,
+      aksi: "TAMBAH_BARANG",
+      keterangan: `Menambahkan barang baru '${nama_barang}' (Kode: ${kdClean})`,
+    });
+
     return res.status(201).json({ status: true, barang });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ status: false, message: error.message });
   }
 };
+
 
 // Update barang
 exports.updateBarang = async (req, res) => {
@@ -141,8 +159,9 @@ exports.updateBarang = async (req, res) => {
 
       if (kdClean !== barang.kd_barang) {
         const exists = await prisma.t_barang.findFirst({
-          where: { kd_barang: kdClean },
+          where: { kd_barang: kdClean, id_toko: barang.id_toko },
         });
+
         if (exists) {
           return res
             .status(400)
@@ -162,6 +181,14 @@ exports.updateBarang = async (req, res) => {
       where: { id },
       data: dataToUpdate,
     });
+
+    createLog({
+      id_toko: barang.id_toko || req.id_toko || 1,
+      id_user: req.user?.userId,
+      aksi: "EDIT_BARANG",
+      keterangan: `Memperbarui data barang #${id} '${updatedBarang.nama_barang}'`,
+    });
+
     return res.status(200).json({ status: true, barang: updatedBarang });
   } catch (error) {
     console.log(error);
@@ -202,10 +229,19 @@ exports.deleteBarang = async (req, res) => {
       });
     }
     await prisma.t_barang.delete({ where: { id } });
+
+    createLog({
+      id_toko: barang.id_toko || req.id_toko || 1,
+      id_user: req.user?.userId,
+      aksi: "HAPUS_BARANG",
+      keterangan: `Menghapus data barang #${id} '${barang.nama_barang}'`,
+    });
+
     return res
       .status(200)
       .json({ status: true, message: "Barang berhasil dihapus" });
   } catch (error) {
+
     console.log(error);
     return res.status(500).json({ status: false, message: error.message });
   }
@@ -214,7 +250,9 @@ exports.deleteBarang = async (req, res) => {
 // Get all barang (no pagination)
 exports.getAllBarang = async (req, res) => {
   try {
+    const id_toko = req.id_toko || 1;
     const barang = await prisma.t_barang.findMany({
+      where: { id_toko },
       orderBy: { id: "desc" },
       select: {
         id: true,
@@ -314,15 +352,19 @@ exports.stockBarang = async (req, res) => {
     const take = isAll ? undefined : 10;
     const skip = isAll ? undefined : (page - 1) * take;
     const search = req.query.search || "";
+    const id_toko = req.id_toko || 1;
 
-    const where = search
-      ? {
-        OR: [
-          { nama_barang: { contains: search } },
-          { kd_barang: { contains: search } },
-        ],
-      }
-      : {};
+    const where = {
+      id_toko,
+      ...(search
+        ? {
+            OR: [
+              { nama_barang: { contains: search } },
+              { kd_barang: { contains: search } },
+            ],
+          }
+        : {}),
+    };
 
     // total count
     const total = await prisma.t_barang.count({ where });
@@ -343,6 +385,7 @@ exports.stockBarang = async (req, res) => {
         updated_at: true,
       },
     });
+
 
     const ids = barang.map((b) => b.id);
 

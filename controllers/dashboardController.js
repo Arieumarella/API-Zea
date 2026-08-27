@@ -3,14 +3,15 @@ const prisma = new PrismaClient();
 
 exports.getSaldo = async (req, res) => {
   try {
-    const saldo = await prisma.t_saldo.findFirst({
+    const id_toko = req.id_toko || 1;
+    let saldo = await prisma.t_saldo.findFirst({
+      where: { id_toko },
       orderBy: { id: "asc" },
     });
 
     if (!saldo) {
-      return res.status(404).json({
-        status: false,
-        message: "Data saldo tidak ditemukan",
+      saldo = await prisma.t_saldo.create({
+        data: { id_toko, jml_saldo: 0, created_at: new Date(), updated_at: new Date() },
       });
     }
 
@@ -31,13 +32,15 @@ exports.getSaldo = async (req, res) => {
 
 exports.getTransaksiPenjualan = async (req, res) => {
   try {
+    const id_toko = req.id_toko || 1;
     const result = await prisma.$queryRaw`
       SELECT
         SUM(total_transaksi) AS total_transaksi_keluar
       FROM
         t_transaksi_keluar
       WHERE
-        tgl_transaksi >= DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
+        id_toko = ${id_toko}
+        AND tgl_transaksi >= DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
         AND tgl_transaksi <= LAST_DAY(CURRENT_DATE())
     `;
 
@@ -59,14 +62,16 @@ exports.getTransaksiPenjualan = async (req, res) => {
 
 exports.getTransaksiPembelian = async (req, res) => {
   try {
+    const id_toko = req.id_toko || 1;
     const result = await prisma.$queryRaw`
       SELECT
-    SUM(total_transaksi) AS total_transaksi_masuk
-    FROM
+        SUM(total_transaksi) AS total_transaksi_masuk
+      FROM
         t_transaksi_masuk
-    WHERE
-    tgl_transaksi >= DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
-    AND tgl_transaksi <= LAST_DAY(CURRENT_DATE());
+      WHERE
+        id_toko = ${id_toko}
+        AND tgl_transaksi >= DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
+        AND tgl_transaksi <= LAST_DAY(CURRENT_DATE());
     `;
 
     const totalTransaksiMasuk = result[0]?.total_transaksi_masuk
@@ -87,12 +92,12 @@ exports.getTransaksiPembelian = async (req, res) => {
 
 exports.getStokBarang = async (req, res) => {
   try {
+    const id_toko = req.id_toko || 1;
     const result = await prisma.$queryRaw`
-      SELECT SUM(jml_yard) AS tot_yard, SUM(jml_rol) AS tot_rol FROM t_barang
+      SELECT SUM(jml_yard) AS tot_yard, SUM(jml_rol) AS tot_rol FROM t_barang WHERE id_toko = ${id_toko}
     `;
 
     const totalYard = result[0]?.tot_yard ? Number(result[0].tot_yard) : 0;
-
     const totalRol = result[0]?.tot_rol ? Number(result[0].tot_rol) : 0;
 
     return res.status(200).json({
@@ -111,6 +116,7 @@ exports.getStokBarang = async (req, res) => {
 exports.getPalingLaku = async (req, res) => {
   try {
     const { dari, sampai } = req.query;
+    const id_toko = req.id_toko || 1;
     if (!dari || !sampai) {
       return res.status(400).json({
         status: false,
@@ -120,12 +126,12 @@ exports.getPalingLaku = async (req, res) => {
 
     const result = await prisma.$queryRaw`
       SELECT b.nama_barang AS nama, terjual, revenue FROM (
-        SELECT b.id_barang, SUM(COALESCE(b.jml_yard, 0) - COALESCE(b.jml_yard_retur, 0)) AS terjual, SUM((COALESCE(b.jml_yard, 0) - COALESCE(b.jml_yard_retur, 0)) * b.harga_satuan) AS revenue FROM (SELECT * FROM t_transaksi_keluar WHERE tgl_transaksi >= ${dari} AND tgl_transaksi <= ${sampai}) AS a
+        SELECT b.id_barang, SUM(COALESCE(b.jml_yard, 0) - COALESCE(b.jml_yard_retur, 0)) AS terjual, SUM((COALESCE(b.jml_yard, 0) - COALESCE(b.jml_yard_retur, 0)) * b.harga_satuan) AS revenue FROM (SELECT * FROM t_transaksi_keluar WHERE id_toko = ${id_toko} AND tgl_transaksi >= ${dari} AND tgl_transaksi <= ${sampai}) AS a
         LEFT JOIN (SELECT id_barang, id_transaksi_keluar, jml_yard, jml_yard_retur, harga_satuan FROM t_transaksi_keluar_detail) AS b ON a.id=b.id_transaksi_keluar
         GROUP BY b.id_barang ORDER BY terjual DESC LIMIT 5
         ) AS a
         LEFT JOIN
-        (SELECT id, nama_barang FROM t_barang) AS b ON a.id_barang=b.id
+        (SELECT id, nama_barang FROM t_barang WHERE id_toko = ${id_toko}) AS b ON a.id_barang=b.id
     `;
 
     const data = (result || []).map((row) => ({
@@ -144,6 +150,7 @@ exports.getPalingLaku = async (req, res) => {
 exports.getChartPenjualan = async (req, res) => {
   try {
     const { filter } = req.query;
+    const id_toko = req.id_toko || 1;
     let data = [];
 
     if (filter === "harian") {
@@ -153,19 +160,19 @@ exports.getChartPenjualan = async (req, res) => {
           SUM(total_transaksi) AS penjualan,
           SUM(GREATEST(0, IF(status_pembayaran = '1', total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = t_transaksi_keluar.id), 0), 0))) AS belum_dibayar
         FROM t_transaksi_keluar
-        WHERE YEARWEEK(tgl_transaksi, 1) = YEARWEEK(CURRENT_DATE(), 1)
+        WHERE id_toko = ${id_toko} AND YEARWEEK(tgl_transaksi, 1) = YEARWEEK(CURRENT_DATE(), 1)
         GROUP BY label
       `;
       const pengeluaran = await prisma.$queryRaw`
         SELECT ELT(DAYOFWEEK(tgl_transaksi), 'Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu') AS label, SUM(total_transaksi) AS pengeluaran
         FROM t_transaksi_masuk
-        WHERE YEARWEEK(tgl_transaksi, 1) = YEARWEEK(CURRENT_DATE(), 1)
+        WHERE id_toko = ${id_toko} AND YEARWEEK(tgl_transaksi, 1) = YEARWEEK(CURRENT_DATE(), 1)
         GROUP BY label
       `;
       const oprasional = await prisma.$queryRaw`
         SELECT ELT(DAYOFWEEK(COALESCE(tanggal, created_at)), 'Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu') AS label, SUM(jml_biaya) AS pengeluaran
         FROM t_oprasional
-        WHERE YEARWEEK(COALESCE(tanggal, created_at), 1) = YEARWEEK(CURRENT_DATE(), 1)
+        WHERE id_toko = ${id_toko} AND YEARWEEK(COALESCE(tanggal, created_at), 1) = YEARWEEK(CURRENT_DATE(), 1)
         GROUP BY label
       `;
       const labels = [
@@ -196,20 +203,20 @@ exports.getChartPenjualan = async (req, res) => {
           SUM(total_transaksi) AS penjualan,
           SUM(GREATEST(0, IF(status_pembayaran = '1', total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = t_transaksi_keluar.id), 0), 0))) AS belum_dibayar
         FROM t_transaksi_keluar
-        WHERE MONTH(tgl_transaksi) = MONTH(CURRENT_DATE()) AND YEAR(tgl_transaksi) = YEAR(CURRENT_DATE())
+        WHERE id_toko = ${id_toko} AND MONTH(tgl_transaksi) = MONTH(CURRENT_DATE()) AND YEAR(tgl_transaksi) = YEAR(CURRENT_DATE())
         GROUP BY label
       `;
       const pengeluaran = await prisma.$queryRaw`
         SELECT CONCAT('Minggu ', WEEK(tgl_transaksi) - WEEK(DATE_FORMAT(tgl_transaksi, '%Y-%m-01')) + 1) AS label,
           SUM(total_transaksi) AS pengeluaran
         FROM t_transaksi_masuk
-        WHERE MONTH(tgl_transaksi) = MONTH(CURRENT_DATE()) AND YEAR(tgl_transaksi) = YEAR(CURRENT_DATE())
+        WHERE id_toko = ${id_toko} AND MONTH(tgl_transaksi) = MONTH(CURRENT_DATE()) AND YEAR(tgl_transaksi) = YEAR(CURRENT_DATE())
         GROUP BY label
       `;
       const oprasional = await prisma.$queryRaw`
         SELECT CONCAT('Minggu ', WEEK(COALESCE(tanggal, created_at)) - WEEK(DATE_FORMAT(COALESCE(tanggal, created_at), '%Y-%m-01')) + 1) AS label, SUM(jml_biaya) AS pengeluaran
         FROM t_oprasional
-        WHERE MONTH(COALESCE(tanggal, created_at)) = MONTH(CURRENT_DATE()) AND YEAR(COALESCE(tanggal, created_at)) = YEAR(CURRENT_DATE())
+        WHERE id_toko = ${id_toko} AND MONTH(COALESCE(tanggal, created_at)) = MONTH(CURRENT_DATE()) AND YEAR(COALESCE(tanggal, created_at)) = YEAR(CURRENT_DATE())
         GROUP BY label
       `;
       const mingguLabels = [
@@ -239,18 +246,21 @@ exports.getChartPenjualan = async (req, res) => {
           SUM(total_transaksi) AS penjualan,
           SUM(GREATEST(0, IF(status_pembayaran = '1', total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = t_transaksi_keluar.id), 0), 0))) AS belum_dibayar
         FROM t_transaksi_keluar
+        WHERE id_toko = ${id_toko}
         GROUP BY YEAR(tgl_transaksi)
         ORDER BY label ASC
       `;
       const pengeluaran = await prisma.$queryRaw`
         SELECT YEAR(tgl_transaksi) AS label, SUM(total_transaksi) AS pengeluaran
         FROM t_transaksi_masuk
+        WHERE id_toko = ${id_toko}
         GROUP BY YEAR(tgl_transaksi)
         ORDER BY label ASC
       `;
       const oprasional = await prisma.$queryRaw`
         SELECT YEAR(COALESCE(tanggal, created_at)) AS label, SUM(jml_biaya) AS pengeluaran
         FROM t_oprasional
+        WHERE id_toko = ${id_toko}
         GROUP BY YEAR(COALESCE(tanggal, created_at))
       `;
       const tahunLabels = [
@@ -281,21 +291,21 @@ exports.getChartPenjualan = async (req, res) => {
           SUM(total_transaksi) AS penjualan,
           SUM(GREATEST(0, IF(status_pembayaran = '1', total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = t_transaksi_keluar.id), 0), 0))) AS belum_dibayar
         FROM t_transaksi_keluar
-        WHERE YEAR(tgl_transaksi) = YEAR(CURRENT_DATE())
+        WHERE id_toko = ${id_toko} AND YEAR(tgl_transaksi) = YEAR(CURRENT_DATE())
         GROUP BY MONTH(tgl_transaksi)
         ORDER BY MONTH(tgl_transaksi)
       `;
       const pengeluaran = await prisma.$queryRaw`
         SELECT ELT(MONTH(tgl_transaksi), 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des') AS label, SUM(total_transaksi) AS pengeluaran
         FROM t_transaksi_masuk
-        WHERE YEAR(tgl_transaksi) = YEAR(CURRENT_DATE())
+        WHERE id_toko = ${id_toko} AND YEAR(tgl_transaksi) = YEAR(CURRENT_DATE())
         GROUP BY MONTH(tgl_transaksi)
         ORDER BY MONTH(tgl_transaksi)
       `;
       const oprasional = await prisma.$queryRaw`
         SELECT ELT(MONTH(COALESCE(tanggal, created_at)), 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des') AS label, SUM(jml_biaya) AS pengeluaran
         FROM t_oprasional
-        WHERE YEAR(COALESCE(tanggal, created_at)) = YEAR(CURRENT_DATE())
+        WHERE id_toko = ${id_toko} AND YEAR(COALESCE(tanggal, created_at)) = YEAR(CURRENT_DATE())
         GROUP BY MONTH(COALESCE(tanggal, created_at))
         ORDER BY MONTH(COALESCE(tanggal, created_at))
       `;
@@ -314,7 +324,6 @@ exports.getChartPenjualan = async (req, res) => {
         "Des",
       ];
       data = bulanLabels.map((label) => {
-        // Cari label yang diawali nama bulan (karena MONTHNAME bisa "May" dll)
         const pen = penjualan.find((x) => x.label != null && String(x.label).startsWith(label));
         const peng = pengeluaran.find((x) => x.label != null && String(x.label).startsWith(label));
         const opr = oprasional.find((x) => x.label != null && String(x.label).startsWith(label));
@@ -328,7 +337,6 @@ exports.getChartPenjualan = async (req, res) => {
       });
     }
 
-    // Limit bulanan to 12, others to 10 entries
     let limit = 10;
     if (!filter || filter === "bulanan") limit = 12;
     return res.status(200).json({ status: true, data: data.slice(0, limit) });
@@ -341,6 +349,7 @@ exports.getChartPenjualan = async (req, res) => {
 exports.getDataOprasional = async (req, res) => {
   try {
     const { dari, sampai } = req.query;
+    const id_toko = req.id_toko || 1;
     if (!dari || !sampai) {
       return res.status(400).json({
         status: false,
@@ -350,16 +359,17 @@ exports.getDataOprasional = async (req, res) => {
 
     const result = await prisma.$queryRaw`
       SELECT
-    nama_baya AS kategori,
-    jml_biaya AS jumlah
-    FROM
+        nama_baya AS kategori,
+        jml_biaya AS jumlah
+      FROM
         t_oprasional
-    WHERE
-        DATE(COALESCE(tanggal, created_at)) >= ${dari}
+      WHERE
+        id_toko = ${id_toko}
+        AND DATE(COALESCE(tanggal, created_at)) >= ${dari}
         AND DATE(COALESCE(tanggal, created_at)) <= ${sampai}
-    ORDER BY
+      ORDER BY
         id DESC;
-        `;
+    `;
 
     const data = (result || []).map((row) => ({
       kategori: row.kategori,
@@ -376,6 +386,7 @@ exports.getDataOprasional = async (req, res) => {
 exports.getDataPelanggan = async (req, res) => {
   try {
     const { dari, sampai } = req.query;
+    const id_toko = req.id_toko || 1;
     if (!dari || !sampai) {
       return res.status(400).json({
         status: false,
@@ -384,9 +395,9 @@ exports.getDataPelanggan = async (req, res) => {
     }
 
     const result = await prisma.$queryRaw`
-      SELECT b.nama AS nama, pembelian, totalNilai FROM (SELECT id_pelanggan, COUNT(*) AS pembelian, SUM(total_transaksi) AS totalNilai FROM t_transaksi_keluar WHERE tgl_transaksi >= ${dari} AND tgl_transaksi <= ${sampai} GROUP BY id_pelanggan ORDER BY COUNT(*),SUM(total_transaksi) DESC ) AS a
-      LEFT JOIN (SELECT * FROM t_pelanggan) AS b ON a.id_pelanggan=b.id LIMIT 8
-        `;
+      SELECT b.nama AS nama, pembelian, totalNilai FROM (SELECT id_pelanggan, COUNT(*) AS pembelian, SUM(total_transaksi) AS totalNilai FROM t_transaksi_keluar WHERE id_toko = ${id_toko} AND tgl_transaksi >= ${dari} AND tgl_transaksi <= ${sampai} GROUP BY id_pelanggan ORDER BY COUNT(*),SUM(total_transaksi) DESC ) AS a
+      LEFT JOIN (SELECT * FROM t_pelanggan WHERE id_toko = ${id_toko}) AS b ON a.id_pelanggan=b.id LIMIT 8
+    `;
 
     const data = (result || []).map((row) => ({
       nama: row.nama,
@@ -403,6 +414,7 @@ exports.getDataPelanggan = async (req, res) => {
 
 exports.getJatuhTempoPiutang = async (req, res) => {
   try {
+    const id_toko = req.id_toko || 1;
     const transaksiKeluarRaw = await prisma.$queryRaw`
       SELECT
         b.id AS id,
@@ -433,7 +445,8 @@ exports.getJatuhTempoPiutang = async (req, res) => {
         GROUP BY id_transaksi
       ) AS a ON b.id = a.id_transaksi
       LEFT JOIN t_pelanggan AS c ON b.id_pelanggan = c.id
-      WHERE b.status_pembayaran = '1'
+      WHERE b.id_toko = ${id_toko}
+        AND b.status_pembayaran = '1'
         AND (b.total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_keluar WHERE id_transaksi = b.id), 0)) > 0
       `;
 
@@ -467,7 +480,8 @@ exports.getJatuhTempoPiutang = async (req, res) => {
         GROUP BY id_transaksi
       ) AS a ON b.id = a.id_transaksi
       LEFT JOIN t_supplier AS c ON b.id_supplier = c.id
-      WHERE b.status_pembayaran = '1'
+      WHERE b.id_toko = ${id_toko}
+        AND b.status_pembayaran = '1'
         AND (b.total_transaksi - COALESCE((SELECT SUM(jml_bayar) FROM t_berjangka_masuk WHERE id_transaksi = b.id), 0)) > 0
       `;
 
@@ -535,3 +549,4 @@ exports.getJatuhTempoPiutang = async (req, res) => {
     return res.status(500).json({ status: false, message: error.message });
   }
 };
+

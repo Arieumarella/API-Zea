@@ -80,12 +80,15 @@ exports.createTransaksiMasuk = async (req, res) => {
     const computedTotal = taxable + ppnAmount;
     console.log(computedTotal);
 
+    const targetTokoId = req.id_toko || 1;
+
     // Use transaction to ensure atomicity
     const result = await prisma.$transaction(async (tx) => {
       const nota = req.file ? req.file.filename : null;
       // create parent transaksi
       const trx = await tx.t_transaksi_masuk.create({
         data: {
+          id_toko: targetTokoId,
           id_supplier: id_supplier || null,
           id_user: id_user || null,
           tgl_transaksi: new Date(tgl_transaksi),
@@ -132,7 +135,6 @@ exports.createTransaksiMasuk = async (req, res) => {
             const current =
               existing.jml_yard != null ? Number(existing.jml_yard) : 0;
             const newJml = current + jml_yard;
-
             const currentRol =
               existing.jml_rol != null ? Number(existing.jml_rol) : 0;
             const newJmlRol = currentRol + jml_rol;
@@ -149,10 +151,10 @@ exports.createTransaksiMasuk = async (req, res) => {
         }
       }
 
-      // Kurangi t_saldo.id = 1 sebesar total transaksi (mewakili pembayaran pembelian)
+      // Kurangi t_saldo sebesar total transaksi (mewakili pembayaran pembelian)
       if (status_pembayaran != "1") {
         try {
-          const saldoRec = await tx.t_saldo.findFirst({ orderBy: { id: "asc" } });
+          const saldoRec = await tx.t_saldo.findFirst({ where: { id_toko: targetTokoId }, orderBy: { id: "asc" } });
           if (saldoRec) {
             const currentSaldo =
               saldoRec.jml_saldo != null ? Number(saldoRec.jml_saldo) : 0;
@@ -165,6 +167,7 @@ exports.createTransaksiMasuk = async (req, res) => {
             // jika belum ada record saldo, buat baru dengan nilai negatif atau sesuai total
             await tx.t_saldo.create({
               data: {
+                id_toko: targetTokoId,
                 jml_saldo: -computedTotal,
                 created_at: new Date(),
                 updated_at: new Date(),
@@ -176,6 +179,7 @@ exports.createTransaksiMasuk = async (req, res) => {
           throw new Error("Gagal memperbarui saldo: " + e.message);
         }
       }
+
 
       // Pembayaran Bertempo
       if (status_pembayaran === "1") {
@@ -262,8 +266,10 @@ exports.getTransaksiMasuk = async (req, res) => {
       waktuAkhir.setHours(23, 59, 59, 999);
     }
 
-    let where = {};
+    const id_toko = req.id_toko || 1;
+    let where = { id_toko };
     if (supplierId) where.id_supplier = supplierId;
+
     if (waktuAwal && waktuAkhir)
       where.tgl_transaksi = { gte: waktuAwal, lte: waktuAkhir };
     else if (waktuAwal) where.tgl_transaksi = { gte: waktuAwal };

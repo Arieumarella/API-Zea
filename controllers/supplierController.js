@@ -8,7 +8,13 @@ exports.getSuppliers = async (req, res) => {
     const take = 10;
     const skip = (page - 1) * take;
     const search = req.query.search || "";
-    const where = search ? { nama: { contains: search } } : {};
+    const id_toko = req.id_toko || 1;
+
+    const where = {
+      id_toko,
+      ...(search ? { nama: { contains: search } } : {}),
+    };
+
     const [suppliers, total] = await Promise.all([
       prisma.t_supplier.findMany({
         skip,
@@ -34,7 +40,9 @@ exports.getSuppliers = async (req, res) => {
 // Get all suppliers (no pagination)
 exports.getAllSuppliers = async (req, res) => {
   try {
+    const id_toko = req.id_toko || 1;
     const suppliers = await prisma.t_supplier.findMany({
+      where: { id_toko },
       orderBy: { id: "desc" },
       select: {
         id: true,
@@ -55,7 +63,8 @@ exports.getAllSuppliers = async (req, res) => {
 exports.getSupplierById = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const supplier = await prisma.t_supplier.findUnique({ where: { id } });
+    const id_toko = req.id_toko || 1;
+    const supplier = await prisma.t_supplier.findFirst({ where: { id, id_toko } });
     if (!supplier) {
       return res
         .status(404)
@@ -72,8 +81,10 @@ exports.getSupplierById = async (req, res) => {
 exports.createSupplier = async (req, res) => {
   try {
     const { nama, no_tlp } = req.body;
+    const id_toko = req.id_toko || 1;
     const supplier = await prisma.t_supplier.create({
       data: {
+        id_toko,
         nama,
         no_tlp,
         created_at: new Date(),
@@ -92,7 +103,8 @@ exports.updateSupplier = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { nama, no_tlp } = req.body;
-    const supplier = await prisma.t_supplier.findUnique({ where: { id } });
+    const id_toko = req.id_toko || 1;
+    const supplier = await prisma.t_supplier.findFirst({ where: { id, id_toko } });
     if (!supplier) {
       return res
         .status(404)
@@ -117,7 +129,8 @@ exports.updateSupplier = async (req, res) => {
 exports.deleteSupplier = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const supplier = await prisma.t_supplier.findUnique({ where: { id } });
+    const id_toko = req.id_toko || 1;
+    const supplier = await prisma.t_supplier.findFirst({ where: { id, id_toko } });
     if (!supplier) {
       return res
         .status(404)
@@ -143,3 +156,4 @@ exports.deleteSupplier = async (req, res) => {
     return res.status(500).json({ status: false, message: error.message });
   }
 };
+

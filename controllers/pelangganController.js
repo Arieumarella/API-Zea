@@ -8,16 +8,21 @@ exports.getPelanggan = async (req, res) => {
     const take = 10;
     const skip = (page - 1) * take;
     const search = req.query.search || "";
-    const whereFind = search ? { nama: { contains: search } } : {};
-    const whereCount = search ? { nama: { contains: search } } : {};
+    const id_toko = req.id_toko || 1;
+
+    const whereCondition = {
+      id_toko,
+      ...(search ? { nama: { contains: search } } : {}),
+    };
+
     const [pelanggan, total] = await Promise.all([
       prisma.t_pelanggan.findMany({
         skip,
         take,
-        where: whereFind,
+        where: whereCondition,
         orderBy: { id: "desc" },
       }),
-      prisma.t_pelanggan.count({ where: whereCount }),
+      prisma.t_pelanggan.count({ where: whereCondition }),
     ]);
     return res.status(200).json({
       status: true,
@@ -35,7 +40,9 @@ exports.getPelanggan = async (req, res) => {
 // Get all pelanggan without pagination
 exports.getAllPelanggan = async (req, res) => {
   try {
+    const id_toko = req.id_toko || 1;
     const pelanggan = await prisma.t_pelanggan.findMany({
+      where: { id_toko },
       orderBy: { id: "asc" },
     });
     return res.status(200).json({
@@ -53,7 +60,8 @@ exports.getAllPelanggan = async (req, res) => {
 exports.getPelangganById = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const pelanggan = await prisma.t_pelanggan.findUnique({ where: { id } });
+    const id_toko = req.id_toko || 1;
+    const pelanggan = await prisma.t_pelanggan.findFirst({ where: { id, id_toko } });
     if (!pelanggan) {
       return res
         .status(404)
@@ -70,8 +78,10 @@ exports.getPelangganById = async (req, res) => {
 exports.createPelanggan = async (req, res) => {
   try {
     const { nama, no_tlp } = req.body;
+    const id_toko = req.id_toko || 1;
     const pelanggan = await prisma.t_pelanggan.create({
       data: {
+        id_toko,
         nama,
         no_tlp,
         created_at: new Date(),
@@ -90,7 +100,8 @@ exports.updatePelanggan = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { nama, no_tlp } = req.body;
-    const pelanggan = await prisma.t_pelanggan.findUnique({ where: { id } });
+    const id_toko = req.id_toko || 1;
+    const pelanggan = await prisma.t_pelanggan.findFirst({ where: { id, id_toko } });
     if (!pelanggan) {
       return res
         .status(404)
@@ -115,7 +126,8 @@ exports.updatePelanggan = async (req, res) => {
 exports.deletePelanggan = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const pelanggan = await prisma.t_pelanggan.findUnique({ where: { id } });
+    const id_toko = req.id_toko || 1;
+    const pelanggan = await prisma.t_pelanggan.findFirst({ where: { id, id_toko } });
     if (!pelanggan) {
       return res
         .status(404)
@@ -141,3 +153,4 @@ exports.deletePelanggan = async (req, res) => {
     return res.status(500).json({ status: false, message: error.message });
   }
 };
+

@@ -1,12 +1,19 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
-// Get profile toko (id = 1)
+// Get profile toko based on active req.id_toko
 exports.getProfile = async (req, res) => {
   try {
-    const profile = await prisma.t_profile_toko.findUnique({
-      where: { id: 1 },
+    const id_toko = req.id_toko || 1;
+    let profile = await prisma.t_toko.findUnique({
+      where: { id: id_toko },
     });
+    
+    // Fallback to t_profile_toko if t_toko is empty
+    if (!profile) {
+      profile = await prisma.t_profile_toko.findUnique({ where: { id: 1 } });
+    }
+
     if (!profile) {
       return res
         .status(404)
@@ -19,7 +26,7 @@ exports.getProfile = async (req, res) => {
   }
 };
 
-// Create profile toko (only if not exists)
+// Create profile toko
 exports.createProfile = async (req, res) => {
   try {
     const {
@@ -33,18 +40,9 @@ exports.createProfile = async (req, res) => {
       maps,
     } = req.body;
 
-    const existing = await prisma.t_profile_toko.findUnique({
-      where: { id: 1 },
-    });
-    if (existing) {
-      return res
-        .status(400)
-        .json({ status: false, message: "Profile sudah ada. Gunakan update." });
-    }
-
-    const created = await prisma.t_profile_toko.create({
+    const created = await prisma.t_toko.create({
       data: {
-        nama_toko: nama_toko || null,
+        nama_toko: nama_toko || "Toko Baru",
         alamat: alamat || null,
         nomor_telepon_1: nomor_telepon_1 || null,
         nomor_telepon_2: nomor_telepon_2 || null,
@@ -52,6 +50,7 @@ exports.createProfile = async (req, res) => {
         rekening: rekening || null,
         nama_rekening: nama_rekening || null,
         maps: maps || null,
+        status_aktif: true,
         created_at: new Date(),
         updated_at: new Date(),
       },
@@ -66,9 +65,10 @@ exports.createProfile = async (req, res) => {
   }
 };
 
-// Update profile toko (id = 1). If not exists, create it.
+// Update profile toko based on req.id_toko
 exports.updateProfile = async (req, res) => {
   try {
+    const id_toko = req.id_toko || 1;
     const {
       nama_toko,
       alamat,
@@ -80,13 +80,13 @@ exports.updateProfile = async (req, res) => {
       maps,
     } = req.body;
 
-    const existing = await prisma.t_profile_toko.findUnique({
-      where: { id: 1 },
+    const existing = await prisma.t_toko.findUnique({
+      where: { id: id_toko },
     });
 
     if (existing) {
-      const updated = await prisma.t_profile_toko.update({
-        where: { id: 1 },
+      const updated = await prisma.t_toko.update({
+        where: { id: id_toko },
         data: {
           nama_toko: nama_toko !== undefined ? nama_toko : existing.nama_toko,
           alamat: alamat !== undefined ? alamat : existing.alamat,
@@ -120,9 +120,9 @@ exports.updateProfile = async (req, res) => {
         });
     }
 
-    // jika belum ada, buat baru
-    const created = await prisma.t_profile_toko.create({
+    const created = await prisma.t_toko.create({
       data: {
+        id: id_toko,
         nama_toko: nama_toko || null,
         alamat: alamat || null,
         nomor_telepon_1: nomor_telepon_1 || null,
@@ -131,6 +131,7 @@ exports.updateProfile = async (req, res) => {
         rekening: rekening || null,
         nama_rekening: nama_rekening || null,
         maps: maps || null,
+        status_aktif: true,
         created_at: new Date(),
         updated_at: new Date(),
       },
@@ -145,11 +146,12 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
-// Delete profile toko (id = 1)
+// Delete profile toko
 exports.deleteProfile = async (req, res) => {
   try {
-    const existing = await prisma.t_profile_toko.findUnique({
-      where: { id: 1 },
+    const id_toko = req.id_toko || 1;
+    const existing = await prisma.t_toko.findUnique({
+      where: { id: id_toko },
     });
     if (!existing) {
       return res
@@ -157,12 +159,16 @@ exports.deleteProfile = async (req, res) => {
         .json({ status: false, message: "Profile toko tidak ditemukan" });
     }
 
-    await prisma.t_profile_toko.delete({ where: { id: 1 } });
+    await prisma.t_toko.update({
+      where: { id: id_toko },
+      data: { status_aktif: false, updated_at: new Date() },
+    });
     return res
       .status(200)
-      .json({ status: true, message: "Profile toko dihapus" });
+      .json({ status: true, message: "Profile toko dinonaktifkan" });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ status: false, message: error.message });
   }
 };
+
