@@ -54,7 +54,10 @@ else
   echo "Baseline migration marked successfully."
 fi
 
+npx prisma migrate resolve --applied "20260827145500_add_multi_toko" --schema=./prisma/schema.prisma 2>/dev/null || true
+
 echo "=== Applying pending migrations (safe — never deletes data) ==="
+
 
 # Step 2: Apply all pending migrations.
 # prisma migrate deploy ONLY runs additive SQL (ADD COLUMN, CREATE TABLE).
