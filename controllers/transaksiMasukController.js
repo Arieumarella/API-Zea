@@ -64,17 +64,16 @@ exports.createTransaksiMasuk = async (req, res) => {
       }
     }
 
-    // Hitung ppn (berdasarkan subtotal setelah discount)
-    const ppnType = tipe_ppn || "";
-    const ppnVal = Number(jml_ppn || 0);
+    // Hitung ppn otomatis (DPP Nilai Lain & Tax, default 11%)
+    const ppnType = tipe_ppn || "persen";
+    const ppnVal = Number(jml_ppn) || 11;
     const taxable = subtotal - discountAmount;
     let ppnAmount = 0;
-    if (ppnVal && ppnVal > 0) {
-      if (ppnType === "persen") {
-        ppnAmount = (taxable * ppnVal) / 100;
-      } else {
-        ppnAmount = ppnVal;
-      }
+    if (ppnType === "persen") {
+      const dppNilaiLain = Math.round((11 / 12) * taxable);
+      ppnAmount = Math.round(0.12 * dppNilaiLain);
+    } else {
+      ppnAmount = ppnVal;
     }
 
     const computedTotal = taxable + ppnAmount;
@@ -522,17 +521,16 @@ exports.updateTransaksiMasuk = async (req, res) => {
       }
     }
 
-    // Hitung ppn
-    const ppnType = tipe_ppn || "";
-    const ppnVal = Number(jml_ppn || 0);
+    // Hitung ppn otomatis (DPP Nilai Lain & Tax, default 11%)
+    const ppnType = tipe_ppn || "persen";
+    const ppnVal = Number(jml_ppn) || 11;
     const taxable = subtotal - discountAmount;
     let ppnAmount = 0;
-    if (ppnVal && ppnVal > 0) {
-      if (ppnType === "persen") {
-        ppnAmount = (taxable * ppnVal) / 100;
-      } else {
-        ppnAmount = ppnVal;
-      }
+    if (ppnType === "persen") {
+      const dppNilaiLain = Math.round((11 / 12) * taxable);
+      ppnAmount = Math.round(0.12 * dppNilaiLain);
+    } else {
+      ppnAmount = ppnVal;
     }
 
     const computedTotal = taxable + ppnAmount;
