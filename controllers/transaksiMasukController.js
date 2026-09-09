@@ -319,7 +319,14 @@ exports.getTransaksiMasuk = async (req, res) => {
       supplierIds.length
         ? prisma.t_supplier.findMany({
             where: { id: { in: supplierIds } },
-            select: { id: true, nama: true },
+            select: {
+              id: true,
+              nama: true,
+              no_tlp: true,
+              npwp: true,
+              email: true,
+              alamat: true,
+            },
           })
         : [],
       userIds.length
@@ -331,7 +338,7 @@ exports.getTransaksiMasuk = async (req, res) => {
     ]);
 
     const supplierMap = Object.fromEntries(
-      suppliers.map((s) => [s.id, s.nama])
+      suppliers.map((s) => [s.id, s])
     );
     const userMap = Object.fromEntries(
       users.map((u) => [u.id, { id: u.id, nama: u.nama, username: u.username }])
@@ -425,7 +432,7 @@ exports.getTransaksiMasuk = async (req, res) => {
       status_pembayaran: item.status_pembayaran,
       tenor: item.tenor,
       supplier: item.id_supplier
-        ? { id: item.id_supplier, nama: supplierMap[item.id_supplier] || null }
+        ? supplierMap[item.id_supplier] || { id: item.id_supplier, nama: null }
         : null,
       total_transaksi:
         item.total_transaksi != null ? Number(item.total_transaksi) : 0,

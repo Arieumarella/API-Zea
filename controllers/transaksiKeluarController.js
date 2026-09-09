@@ -321,7 +321,14 @@ exports.getTransaksiKeluar = async (req, res) => {
       pelangganIds.length
         ? prisma.t_pelanggan.findMany({
             where: { id: { in: pelangganIds } },
-            select: { id: true, nama: true },
+            select: {
+              id: true,
+              nama: true,
+              no_tlp: true,
+              npwp: true,
+              email: true,
+              alamat: true,
+            },
           })
         : [],
       userIds.length
@@ -333,7 +340,7 @@ exports.getTransaksiKeluar = async (req, res) => {
     ]);
 
     const pelangganMap = Object.fromEntries(
-      pelangganList.map((p) => [p.id, p.nama])
+      pelangganList.map((p) => [p.id, p])
     );
     const userMap = Object.fromEntries(
       users.map((u) => [u.id, { id: u.id, nama: u.nama, username: u.username }])
@@ -427,10 +434,7 @@ exports.getTransaksiKeluar = async (req, res) => {
       status_pembayaran: item.status_pembayaran,
       tenor: item.tenor,
       pelanggan: item.id_pelanggan
-        ? {
-            id: item.id_pelanggan,
-            nama: pelangganMap[item.id_pelanggan] || null,
-          }
+        ? pelangganMap[item.id_pelanggan] || { id: item.id_pelanggan, nama: null }
         : null,
       total_transaksi:
         item.total_transaksi != null ? Number(item.total_transaksi) : 0,
