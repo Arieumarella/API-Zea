@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: pos_api_staging
+    restart: unless-stopped
+    env_file:
+      - .env.staging
+    environment:
+      - PORT=${PORT:-3000}
+      - NODE_ENV=staging
+    expose:
+      - "3000"
+    # Port 3001 pada host dibuka untuk mempermudah testing Postman / healthcheck tanpa bentrok dengan API Production (port 3000)
+    ports:
+      - "3001:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - pos_uploads_staging:/app/uploads
+    networks:
+      - pos_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+networks:
+  pos_network:
+    external: true
+
+volumes:
+  pos_uploads_staging:
