@@ -1057,7 +1057,16 @@ exports.getTransaksiMasukById = async (req, res) => {
       tgl_transaksi: trx.tgl_transaksi,
       status_pembayaran: trx.status_pembayaran,
       tenor: trx.tenor,
-      supplier: supplier ? { id: supplier.id, nama: supplier.nama } : null,
+      supplier: supplier
+        ? {
+            id: supplier.id,
+            nama: supplier.nama,
+            no_tlp: supplier.no_tlp,
+            npwp: supplier.npwp,
+            email: supplier.email,
+            alamat: supplier.alamat,
+          }
+        : null,
       total_transaksi:
         trx.total_transaksi != null ? Number(trx.total_transaksi) : 0,
       tipe_discount: trx.tipe_discount,

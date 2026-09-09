@@ -1045,7 +1045,14 @@ exports.getTransaksiKeluarById = async (req, res) => {
       status_pembayaran: trx.status_pembayaran,
       tenor: trx.tenor,
       pelanggan: pelanggan
-        ? { id: pelanggan.id, nama: pelanggan.nama, no_tlp: pelanggan.no_tlp }
+        ? {
+            id: pelanggan.id,
+            nama: pelanggan.nama,
+            no_tlp: pelanggan.no_tlp,
+            npwp: pelanggan.npwp,
+            email: pelanggan.email,
+            alamat: pelanggan.alamat,
+          }
         : null,
       total_transaksi:
         trx.total_transaksi != null ? Number(trx.total_transaksi) : 0,
