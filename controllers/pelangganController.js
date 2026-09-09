@@ -12,7 +12,16 @@ exports.getPelanggan = async (req, res) => {
 
     const whereCondition = {
       id_toko,
-      ...(search ? { nama: { contains: search } } : {}),
+      ...(search
+        ? {
+            OR: [
+              { nama: { contains: search } },
+              { no_tlp: { contains: search } },
+              { npwp: { contains: search } },
+              { email: { contains: search } },
+            ],
+          }
+        : {}),
     };
 
     const [pelanggan, total] = await Promise.all([
@@ -77,13 +86,16 @@ exports.getPelangganById = async (req, res) => {
 // Create pelanggan
 exports.createPelanggan = async (req, res) => {
   try {
-    const { nama, no_tlp } = req.body;
+    const { nama, no_tlp, npwp, email, alamat } = req.body;
     const id_toko = req.id_toko || 1;
     const pelanggan = await prisma.t_pelanggan.create({
       data: {
         id_toko,
         nama,
         no_tlp,
+        npwp: npwp || null,
+        email: email || null,
+        alamat: alamat || null,
         created_at: new Date(),
         updated_at: new Date(),
       },
@@ -99,7 +111,7 @@ exports.createPelanggan = async (req, res) => {
 exports.updatePelanggan = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { nama, no_tlp } = req.body;
+    const { nama, no_tlp, npwp, email, alamat } = req.body;
     const id_toko = req.id_toko || 1;
     const pelanggan = await prisma.t_pelanggan.findFirst({ where: { id, id_toko } });
     if (!pelanggan) {
@@ -112,6 +124,9 @@ exports.updatePelanggan = async (req, res) => {
       data: {
         nama,
         no_tlp,
+        npwp: npwp !== undefined ? (npwp || null) : pelanggan.npwp,
+        email: email !== undefined ? (email || null) : pelanggan.email,
+        alamat: alamat !== undefined ? (alamat || null) : pelanggan.alamat,
         updated_at: new Date(),
       },
     });

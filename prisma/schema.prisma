@@ -78,6 +78,9 @@ model t_pelanggan {
   id_toko    Int?      @default(1)
   nama       String?   @db.VarChar(255)
   no_tlp     String?   @db.VarChar(255)
+  npwp       String?   @db.VarChar(50)
+  email      String?   @db.VarChar(255)
+  alamat     String?   @db.Text
   created_at DateTime? @db.DateTime(0)
   updated_at DateTime? @db.DateTime(0)
 }
@@ -109,6 +112,9 @@ model t_supplier {
   id_toko    Int?      @default(1)
   nama       String?   @db.VarChar(255)
   no_tlp     String?   @db.VarChar(15)
+  npwp       String?   @db.VarChar(50)
+  email      String?   @db.VarChar(255)
+  alamat     String?   @db.Text
   created_at DateTime? @db.DateTime(0)
   updated_at DateTime? @db.DateTime(0)
 }

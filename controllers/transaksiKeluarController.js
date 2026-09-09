@@ -961,7 +961,7 @@ exports.getTransaksiKeluarById = async (req, res) => {
     const pelanggan = trx.id_pelanggan
       ? await prisma.t_pelanggan.findUnique({
           where: { id: trx.id_pelanggan },
-          select: { id: true, nama: true, no_tlp: true },
+          select: { id: true, nama: true, no_tlp: true, npwp: true, email: true, alamat: true },
         })
       : null;
     const penginput = trx.id_user

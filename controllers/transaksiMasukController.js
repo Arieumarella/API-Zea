@@ -971,7 +971,7 @@ exports.getTransaksiMasukById = async (req, res) => {
     const supplier = trx.id_supplier
       ? await prisma.t_supplier.findUnique({
           where: { id: trx.id_supplier },
-          select: { id: true, nama: true },
+          select: { id: true, nama: true, no_tlp: true, npwp: true, email: true, alamat: true },
         })
       : null;
     const penginput = trx.id_user

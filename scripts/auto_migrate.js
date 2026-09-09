@@ -53,6 +53,32 @@ async function main() {
       await prisma.$executeRawUnsafe(`UPDATE \`t_user\` SET \`role\` = 'SUPER_ADMIN' WHERE \`username\` = 'admin' OR \`jabatan\` LIKE '%owner%' OR \`jabatan\` LIKE '%pemilik%';`);
     } catch (e) {}
 
+    // Add npwp, email, and alamat to t_supplier
+    const supplierCols = [
+      { col: 'npwp', type: 'VARCHAR(50)' },
+      { col: 'email', type: 'VARCHAR(255)' },
+      { col: 'alamat', type: 'TEXT' },
+    ];
+    for (const c of supplierCols) {
+      try {
+        await prisma.$executeRawUnsafe(`ALTER TABLE \`t_supplier\` ADD COLUMN \`${c.col}\` ${c.type} NULL;`);
+        console.log(`Added column ${c.col} to table t_supplier`);
+      } catch (e) {}
+    }
+
+    // Add npwp, email, and alamat to t_pelanggan
+    const pelangganCols = [
+      { col: 'npwp', type: 'VARCHAR(50)' },
+      { col: 'email', type: 'VARCHAR(255)' },
+      { col: 'alamat', type: 'TEXT' },
+    ];
+    for (const c of pelangganCols) {
+      try {
+        await prisma.$executeRawUnsafe(`ALTER TABLE \`t_pelanggan\` ADD COLUMN \`${c.col}\` ${c.type} NULL;`);
+        console.log(`Added column ${c.col} to table t_pelanggan`);
+      } catch (e) {}
+    }
+
     console.log("=== Multi-Toko Database Auto-Migration Completed Successfully ===");
   } catch (err) {
     console.error("Auto Migration Warning:", err.message);

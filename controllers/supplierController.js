@@ -12,7 +12,16 @@ exports.getSuppliers = async (req, res) => {
 
     const where = {
       id_toko,
-      ...(search ? { nama: { contains: search } } : {}),
+      ...(search
+        ? {
+            OR: [
+              { nama: { contains: search } },
+              { no_tlp: { contains: search } },
+              { npwp: { contains: search } },
+              { email: { contains: search } },
+            ],
+          }
+        : {}),
     };
 
     const [suppliers, total] = await Promise.all([
@@ -48,6 +57,9 @@ exports.getAllSuppliers = async (req, res) => {
         id: true,
         nama: true,
         no_tlp: true,
+        npwp: true,
+        email: true,
+        alamat: true,
         created_at: true,
         updated_at: true,
       },
@@ -80,13 +92,16 @@ exports.getSupplierById = async (req, res) => {
 // Create supplier
 exports.createSupplier = async (req, res) => {
   try {
-    const { nama, no_tlp } = req.body;
+    const { nama, no_tlp, npwp, email, alamat } = req.body;
     const id_toko = req.id_toko || 1;
     const supplier = await prisma.t_supplier.create({
       data: {
         id_toko,
         nama,
         no_tlp,
+        npwp: npwp || null,
+        email: email || null,
+        alamat: alamat || null,
         created_at: new Date(),
         updated_at: new Date(),
       },
@@ -102,7 +117,7 @@ exports.createSupplier = async (req, res) => {
 exports.updateSupplier = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { nama, no_tlp } = req.body;
+    const { nama, no_tlp, npwp, email, alamat } = req.body;
     const id_toko = req.id_toko || 1;
     const supplier = await prisma.t_supplier.findFirst({ where: { id, id_toko } });
     if (!supplier) {
@@ -115,6 +130,9 @@ exports.updateSupplier = async (req, res) => {
       data: {
         nama,
         no_tlp,
+        npwp: npwp !== undefined ? (npwp || null) : supplier.npwp,
+        email: email !== undefined ? (email || null) : supplier.email,
+        alamat: alamat !== undefined ? (alamat || null) : supplier.alamat,
         updated_at: new Date(),
       },
     });
