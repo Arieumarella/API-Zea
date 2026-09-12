@@ -436,6 +436,10 @@ exports.getTransaksiMasuk = async (req, res) => {
         : null,
       total_transaksi:
         item.total_transaksi != null ? Number(item.total_transaksi) : 0,
+      tipe_discount: item.tipe_discount,
+      jml_discount: item.jml_discount != null ? Number(item.jml_discount) : 0,
+      tipe_ppn: item.tipe_ppn,
+      jml_ppn: item.jml_ppn != null ? Number(item.jml_ppn) : 0,
       penginput: item.id_user ? userMap[item.id_user] || null : null,
       nota: item.nota,
       details: detailsMap[item.id] || [],
