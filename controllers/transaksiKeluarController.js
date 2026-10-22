@@ -37,9 +37,16 @@ exports.createTransaksiKeluar = async (req, res) => {
         .json({ status: false, message: "tgl_transaksi wajib diisi" });
     }
 
-    // Hitung subtotal dari details
+    // Hitung subtotal dari details dan validasi id_barang
     let subtotal = 0;
-    for (const d of details) {
+    for (let idx = 0; idx < details.length; idx++) {
+      const d = details[idx];
+      if (!d.id_barang) {
+        return res.status(400).json({
+          status: false,
+          message: `Barang pada baris ke-${idx + 1} wajib dipilih dari daftar barang`,
+        });
+      }
       const qty = Number(d.jml_yard || 0);
       const price = Number(d.harga_satuan || 0);
       if (isNaN(qty) || isNaN(price)) {
@@ -506,9 +513,16 @@ exports.updateTransaksiKeluar = async (req, res) => {
         .json({ status: false, message: "Transaksi tidak ditemukan" });
     }
 
-    // Hitung subtotal dari details baru
+    // Hitung subtotal dari details baru dan validasi id_barang
     let subtotal = 0;
-    for (const d of details) {
+    for (let idx = 0; idx < details.length; idx++) {
+      const d = details[idx];
+      if (!d.id_barang) {
+        return res.status(400).json({
+          status: false,
+          message: `Barang pada baris ke-${idx + 1} wajib dipilih dari daftar barang`,
+        });
+      }
       const qty = Number(d.jml_yard || 0);
       const price = Number(d.harga_satuan || 0);
       if (isNaN(qty) || isNaN(price)) {
