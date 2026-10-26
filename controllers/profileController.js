@@ -12,6 +12,13 @@ exports.getProfile = async (req, res) => {
     // Fallback to t_profile_toko if t_toko is empty
     if (!profile) {
       profile = await prisma.t_profile_toko.findUnique({ where: { id: 1 } });
+    } else if (id_toko === 1 && !String(profile.alamat || "").trim()) {
+      const legacyProfile = await prisma.t_profile_toko.findUnique({
+        where: { id: 1 },
+      });
+      if (legacyProfile?.alamat) {
+        profile = { ...profile, alamat: legacyProfile.alamat };
+      }
     }
 
     if (!profile) {
