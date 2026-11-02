@@ -71,6 +71,7 @@ const dashboardRouter = require("./routes/dashboardRouter.js");
 const profileRouter = require("./routes/profileRouter.js");
 const tokoRouter = require("./routes/tokoRouter.js");
 const logRouter = require("./routes/logRouter.js");
+const hrRouter = require("./routes/hrRouter.js");
 
 
 app.use(authRouter);
@@ -85,6 +86,7 @@ app.use(dashboardRouter);
 app.use(profileRouter);
 app.use(tokoRouter);
 app.use("/log", logRouter);
+app.use("/api/hr", hrRouter);
 
 // Menjalankan server Express.js
 app.listen(port, () => {

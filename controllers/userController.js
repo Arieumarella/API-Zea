@@ -250,6 +250,22 @@ exports.deleteUser = async (req, res) => {
             "User tidak bisa dihapus karena sudah digunakan di transaksi masuk",
         });
     }
+
+    // Cek relasi di modul HR (tabel baru). User dengan data HR tidak bisa
+    // dihapus; admin disarankan menonaktifkan profil pegawainya.
+    const [hrProfile, hrAttendance, hrPayslip] = await Promise.all([
+      prisma.employee_profiles.findUnique({ where: { user_id: id } }),
+      prisma.attendances.findFirst({ where: { user_id: id } }),
+      prisma.payslips.findFirst({ where: { user_id: id } }),
+    ]);
+    if (hrProfile || hrAttendance || hrPayslip) {
+      return res.status(400).json({
+        status: false,
+        message:
+          "User tidak bisa dihapus karena memiliki data HR (absensi/payroll). Nonaktifkan profil pegawainya di modul HR.",
+      });
+    }
+
     await prisma.t_user.delete({ where: { id } });
 
     createLog({

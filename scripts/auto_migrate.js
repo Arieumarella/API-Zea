@@ -4,6 +4,21 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("=== Running Multi-Toko Database Auto-Migration ===");
   try {
+    // Safety guard: never run the legacy write-based auto migration against an
+    // existing database. Existing data must only be changed by explicit
+    // additive migrations that have been reviewed and backed up.
+    const existingTables = await prisma.$queryRawUnsafe(
+      `SELECT COUNT(*) AS count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 't_barang'`
+    );
+    const tableCount = Number(existingTables?.[0]?.count || 0);
+
+    if (tableCount > 0) {
+      console.log(
+        "Existing database detected. Legacy auto-migration writes skipped; no existing data was modified."
+      );
+      return;
+    }
+
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS \`t_toko\` (
         \`id\` INT NOT NULL AUTO_INCREMENT,

@@ -74,6 +74,66 @@ Security recommendations
 - Use secure, random values for `JWT_SECRET` and DB passwords.
 - Consider using a managed DB or external volume backups.
 
+# Deploy Modul HR / Absensi / Payroll (runbook data-safe)
+
+Migrasi HR bersifat **aditif** (hanya `CREATE TABLE` untuk 10 tabel baru) dan **tidak
+mengubah/menghapus data existing** di tabel POS (`t_toko`, `t_user`, `t_transaksi_*`, dll).
+
+Urutan deploy yang disarankan:
+
+1. **Backup database penuh:**
+   ```bash
+   mysqldump --single-transaction --quick --routines --triggers --events \
+     --default-character-set=utf8mb4 \
+     -h <HOST> -u <USER> -p <DB_NAME> > backup_sebelum_hr.sql
+   ```
+
+2. **Pre-audit checksum** tabel existing:
+   ```sql
+   CHECKSUM TABLE t_toko, t_user, t_barang, t_saldo, t_supplier, t_pelanggan,
+   t_oprasional, t_log, t_berjangka_masuk, t_berjangka_keluar,
+   t_transaksi_masuk, t_transaksi_masuk_detail, t_transaksi_keluar,
+   t_transaksi_keluar_detail, t_profile_toko;
+   ```
+
+3. **Maintenance window singkat** (5–10 menit): hentikan aplikasi agar tidak ada
+   penulisan saat migrasi.
+
+4. **Jalankan migrasi** (bukan `migrate dev`, bukan `db push`, bukan `migrate reset`):
+   ```bash
+   npx prisma migrate deploy
+   ```
+
+5. **Cek SQL migrasi** sebelum deploy (harus lolos tanpa output error):
+   ```bash
+   npm run check:hr-migration
+   ```
+
+6. **Post-audit**: jalankan `CHECKSUM TABLE` yang sama dan bandingkan. Semua tabel
+   existing harus identik. Hanya `_prisma_migrations` (+1 baris) dan 10 tabel HR baru
+   yang berubah.
+
+7. **Backfill data awal** (hanya INSERT ke tabel baru):
+   ```bash
+   npm run backfill:hr:dry   # lihat rencana dulu
+   npm run backfill:hr       # jalankan
+   ```
+
+8. **Start aplikasi** dan smoke test HR (login, atur lokasi toko, absen, approval,
+   payroll). Gunakan `HR_MODULE_ENABLED=false` di env untuk mematikan modul HR tanpa
+   memengaruhi POS existing jika terjadi masalah.
+
+Rollback:
+- Rollback aplikasi: kembalikan image Docker lama. Kode lama tidak membaca tabel HR.
+- Rollback data: restore `backup_sebelum_hr.sql` jika checksum existing berbeda.
+- Jangan drop tabel existing dalam kondisi apa pun.
+
+Catatan:
+- `scripts/auto_migrate.js` tidak menulis apa pun ke database yang sudah memiliki
+  tabel `t_barang` (guard read-only untuk data existing).
+- Backfill HR **tidak** dijalankan otomatis oleh entrypoint; jalankan manual.
+- Container memakai `TZ=Asia/Jakarta`; pastikan environment ini ikut ter-deploy.
+
 If you want, saya bisa:
 - Menambahkan healthcheck di Compose untuk `app` service
 - Menambahkan automatic backups untuk MySQL volume

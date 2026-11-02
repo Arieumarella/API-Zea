@@ -5,7 +5,11 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "check:hr-migration": "node scripts/check_hr_migration_sql.js",
+    "backfill:hr": "node scripts/backfill_hr_defaults.js",
+    "backfill:hr:dry": "node scripts/backfill_hr_defaults.js --dry-run",
+    "prisma:generate": "prisma generate"
   },
   "keywords": [],
   "author": "",
@@ -23,7 +27,8 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
     "prisma": "^6.5.0",
-    "qs": "^6.14.0"
+    "qs": "^6.14.0",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"

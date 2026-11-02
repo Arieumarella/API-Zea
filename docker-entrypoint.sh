@@ -55,6 +55,10 @@ else
 fi
 
 npx prisma migrate resolve --applied "20260827145500_add_multi_toko" --schema=./prisma/schema.prisma 2>/dev/null || true
+
+# Legacy bootstrap helper. It exits immediately on an existing database and
+# never writes to existing tables. HR backfill is intentionally NOT run here;
+# run scripts/backfill_hr_defaults.js manually after the migration audit.
 node scripts/auto_migrate.js || true
 
 

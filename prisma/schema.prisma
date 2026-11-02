@@ -197,3 +197,280 @@ model t_user {
   id_toko    Int?      @default(1)
   role       String?   @default("ADMIN_TOKO") @db.VarChar(50)
 }
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  SICK
+  ANNUAL_LEAVE
+  UNPAID_LEAVE
+  FIELD_DUTY
+  ALPHA
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LeaveType {
+  SICK
+  ANNUAL_LEAVE
+  UNPAID_LEAVE
+  FIELD_DUTY
+}
+
+enum CorrectionType {
+  LATE_DISPENSATION
+  MISSING_CHECKOUT
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED_ACTIVE
+  REJECTED
+  PAID_OFF
+}
+
+enum PayrollStatus {
+  DRAFT
+  FINAL
+}
+
+model store_hr_configs {
+  id                           Int      @id @default(autoincrement())
+  store_id                     Int      @unique
+  latitude                     Decimal? @db.Decimal(10, 7)
+  longitude                    Decimal? @db.Decimal(10, 7)
+  radius_meters                Int      @default(50)
+  work_start_time              String   @default("08:00") @db.VarChar(5)
+  work_end_time                String   @default("17:00") @db.VarChar(5)
+  grace_period_minutes         Int      @default(15)
+  late_penalty_per_occurrence  Decimal  @default(0) @db.Decimal(15, 2)
+  missing_checkout_penalty     Decimal  @default(0) @db.Decimal(15, 2)
+  work_days                    String   @default("1,2,3,4,5,6") @db.VarChar(20)
+  created_at                   DateTime @default(now()) @db.DateTime(0)
+  updated_at                   DateTime @default(now()) @updatedAt @db.DateTime(0)
+
+  @@index([store_id])
+  @@map("store_hr_configs")
+}
+
+model holidays {
+  id           Int      @id @default(autoincrement())
+  store_id     Int
+  holiday_date DateTime @db.Date
+  name         String   @db.VarChar(255)
+  created_at   DateTime @default(now()) @db.DateTime(0)
+
+  @@unique([store_id, holiday_date])
+  @@index([store_id, holiday_date])
+  @@map("holidays")
+}
+
+model employee_profiles {
+  id                         Int       @id @default(autoincrement())
+  user_id                    Int       @unique
+  store_id                   Int
+  employee_code              String?   @unique @db.VarChar(50)
+  nik                        String?   @db.VarChar(30)
+  position                   String?   @db.VarChar(100)
+  base_salary                Decimal   @default(0) @db.Decimal(15, 2)
+  fixed_meal_allowance       Decimal   @default(0) @db.Decimal(15, 2)
+  fixed_transport_allowance  Decimal   @default(0) @db.Decimal(15, 2)
+  overtime_rate_per_hour     Decimal   @default(0) @db.Decimal(15, 2)
+  bank_account               String?   @db.VarChar(50)
+  bank_name                  String?   @db.VarChar(100)
+  annual_leave_quota         Int       @default(12)
+  join_date                  DateTime? @db.Date
+  allow_any_store_checkin    Boolean   @default(false)
+  is_active                  Boolean   @default(true)
+  created_at                 DateTime  @default(now()) @db.DateTime(0)
+  updated_at                 DateTime  @default(now()) @updatedAt @db.DateTime(0)
+
+  @@index([store_id])
+  @@map("employee_profiles")
+}
+
+model attendances {
+  id                       Int              @id @default(autoincrement())
+  user_id                  Int
+  store_id                 Int
+  attendance_date          DateTime         @db.Date
+  check_in_time            DateTime?        @db.DateTime(0)
+  check_in_photo           String?          @db.VarChar(255)
+  check_in_latitude        Decimal?         @db.Decimal(10, 7)
+  check_in_longitude       Decimal?         @db.Decimal(10, 7)
+  check_in_distance_m      Decimal?         @db.Decimal(10, 2)
+  check_in_accuracy_m      Decimal?         @db.Decimal(10, 2)
+  check_out_time           DateTime?        @db.DateTime(0)
+  check_out_photo          String?          @db.VarChar(255)
+  check_out_latitude       Decimal?         @db.Decimal(10, 7)
+  check_out_longitude      Decimal?         @db.Decimal(10, 7)
+  check_out_distance_m     Decimal?         @db.Decimal(10, 2)
+  check_out_accuracy_m     Decimal?         @db.Decimal(10, 2)
+  status                   AttendanceStatus
+  late_minutes             Int              @default(0)
+  notes                    String?          @db.Text
+  created_at               DateTime         @default(now()) @db.DateTime(0)
+  updated_at               DateTime         @default(now()) @updatedAt @db.DateTime(0)
+
+  @@unique([user_id, attendance_date])
+  @@index([store_id, attendance_date])
+  @@index([status])
+  @@map("attendances")
+}
+
+model leave_requests {
+  id           Int           @id @default(autoincrement())
+  user_id      Int
+  store_id     Int
+  type         LeaveType
+  start_date   DateTime      @db.Date
+  end_date     DateTime      @db.Date
+  reason       String        @db.Text
+  attachment   String?       @db.VarChar(255)
+  status       RequestStatus @default(PENDING)
+  approved_by  Int?
+  approved_at  DateTime?     @db.DateTime(0)
+  admin_notes  String?       @db.Text
+  created_at   DateTime      @default(now()) @db.DateTime(0)
+  updated_at   DateTime      @default(now()) @updatedAt @db.DateTime(0)
+
+  @@index([user_id, status])
+  @@index([store_id, start_date])
+  @@map("leave_requests")
+}
+
+model overtime_requests {
+  id             Int           @id @default(autoincrement())
+  user_id        Int
+  store_id       Int
+  overtime_date  DateTime      @db.Date
+  start_time     String        @db.VarChar(5)
+  end_time       String        @db.VarChar(5)
+  duration_hours Decimal       @db.Decimal(5, 2)
+  reason         String        @db.Text
+  status         RequestStatus @default(PENDING)
+  approved_by    Int?
+  approved_at    DateTime?     @db.DateTime(0)
+  admin_notes    String?       @db.Text
+  created_at     DateTime      @default(now()) @db.DateTime(0)
+  updated_at     DateTime      @default(now()) @updatedAt @db.DateTime(0)
+
+  @@index([user_id, status])
+  @@index([store_id, overtime_date])
+  @@map("overtime_requests")
+}
+
+model attendance_corrections {
+  id                        Int            @id @default(autoincrement())
+  user_id                   Int
+  store_id                  Int
+  attendance_date           DateTime       @db.Date
+  correction_type           CorrectionType
+  requested_check_in_time   String?        @db.VarChar(5)
+  requested_check_out_time  String?        @db.VarChar(5)
+  reason                    String         @db.Text
+  attachment                String?        @db.VarChar(255)
+  status                    RequestStatus  @default(PENDING)
+  approved_by               Int?
+  approved_at               DateTime?      @db.DateTime(0)
+  admin_notes               String?        @db.Text
+  created_at                DateTime       @default(now()) @db.DateTime(0)
+  updated_at                DateTime       @default(now()) @updatedAt @db.DateTime(0)
+
+  @@index([user_id, status])
+  @@index([store_id, attendance_date])
+  @@map("attendance_corrections")
+}
+
+model employee_loans {
+  id                   Int        @id @default(autoincrement())
+  user_id              Int
+  store_id             Int
+  total_amount         Decimal    @db.Decimal(15, 2)
+  monthly_installment  Decimal    @db.Decimal(15, 2)
+  remaining_balance    Decimal    @default(0) @db.Decimal(15, 2)
+  loan_date            DateTime   @db.Date
+  reason               String     @db.Text
+  status               LoanStatus @default(PENDING)
+  approved_by          Int?
+  approved_at          DateTime?  @db.DateTime(0)
+  admin_notes          String?    @db.Text
+  created_at           DateTime   @default(now()) @db.DateTime(0)
+  updated_at           DateTime   @default(now()) @updatedAt @db.DateTime(0)
+
+  @@index([user_id, status])
+  @@index([store_id, loan_date])
+  @@map("employee_loans")
+}
+
+model payrolls {
+  id                 Int           @id @default(autoincrement())
+  store_id           Int?
+  period_name        String        @db.VarChar(100)
+  cutoff_start_date  DateTime      @db.Date
+  cutoff_end_date    DateTime      @db.Date
+  status             PayrollStatus @default(DRAFT)
+  total_employees    Int           @default(0)
+  total_gross        Decimal       @default(0) @db.Decimal(15, 2)
+  total_deduction    Decimal       @default(0) @db.Decimal(15, 2)
+  total_net          Decimal       @default(0) @db.Decimal(15, 2)
+  generated_by       Int?
+  finalized_at       DateTime?     @db.DateTime(0)
+  created_at         DateTime      @default(now()) @db.DateTime(0)
+  updated_at         DateTime      @default(now()) @updatedAt @db.DateTime(0)
+
+  @@index([store_id, cutoff_start_date])
+  @@index([status])
+  @@map("payrolls")
+}
+
+model payslips {
+  id                                Int      @id @default(autoincrement())
+  payroll_id                        Int
+  user_id                           Int
+  store_id                          Int
+  store_name_snapshot               String?  @db.VarChar(255)
+  employee_code_snapshot            String?  @db.VarChar(50)
+  employee_name_snapshot            String?  @db.VarChar(255)
+  position_snapshot                 String?  @db.VarChar(100)
+  bank_account_snapshot             String?  @db.VarChar(50)
+  bank_name_snapshot                String?  @db.VarChar(100)
+  period_start                      DateTime @db.Date
+  period_end                        DateTime @db.Date
+  base_salary                       Decimal  @default(0) @db.Decimal(15, 2)
+  fixed_meal_allowance              Decimal  @default(0) @db.Decimal(15, 2)
+  fixed_transport_allowance         Decimal  @default(0) @db.Decimal(15, 2)
+  overtime_rate_per_hour            Decimal  @default(0) @db.Decimal(15, 2)
+  total_working_days                Int      @default(0)
+  total_present_days                Int      @default(0)
+  total_late_count                  Int      @default(0)
+  total_absent_days                 Int      @default(0)
+  total_unpaid_leave_days           Int      @default(0)
+  total_missing_checkout_count      Int      @default(0)
+  total_overtime_hours              Decimal  @default(0) @db.Decimal(8, 2)
+  meal_allowance_amount             Decimal  @default(0) @db.Decimal(15, 2)
+  transport_allowance_amount        Decimal  @default(0) @db.Decimal(15, 2)
+  overtime_pay                      Decimal  @default(0) @db.Decimal(15, 2)
+  late_deduction_amount             Decimal  @default(0) @db.Decimal(15, 2)
+  absence_deduction_amount          Decimal  @default(0) @db.Decimal(15, 2)
+  unpaid_leave_deduction_amount     Decimal  @default(0) @db.Decimal(15, 2)
+  missing_checkout_deduction_amount Decimal  @default(0) @db.Decimal(15, 2)
+  loan_deduction_amount             Decimal  @default(0) @db.Decimal(15, 2)
+  other_deduction_amount            Decimal  @default(0) @db.Decimal(15, 2)
+  bonus_amount                      Decimal  @default(0) @db.Decimal(15, 2)
+  gross_salary                      Decimal  @default(0) @db.Decimal(15, 2)
+  total_deduction                   Decimal  @default(0) @db.Decimal(15, 2)
+  net_salary                        Decimal  @default(0) @db.Decimal(15, 2)
+  loan_breakdown                    Json?
+  created_at                        DateTime @default(now()) @db.DateTime(0)
+  updated_at                        DateTime @default(now()) @updatedAt @db.DateTime(0)
+
+  @@unique([payroll_id, user_id])
+  @@index([user_id])
+  @@index([store_id])
+  @@map("payslips")
+}

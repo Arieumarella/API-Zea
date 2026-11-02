@@ -3,3 +3,7 @@ node_modules
 .env
 
 /generated/prisma
+
+# Runtime HR uploads (selfie & attachments)
+uploads/attendance/
+uploads/hr-attachments/

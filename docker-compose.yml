@@ -10,6 +10,7 @@ services:
     environment:
       - PORT=${PORT:-3000}
       - NODE_ENV=production
+      - TZ=Asia/Jakarta
       # Prisma will read DATABASE_URL from .env (use external DB host)
     ports:
       - "3000:3000"

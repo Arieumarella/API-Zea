@@ -93,6 +93,24 @@ exports.createToko = async (req, res) => {
       },
     });
 
+    // Initialize default HR config for this new store (new table only)
+    try {
+      await prisma.store_hr_configs.create({
+        data: {
+          store_id: newStore.id,
+          radius_meters: 50,
+          work_start_time: "08:00",
+          work_end_time: "17:00",
+          grace_period_minutes: 15,
+          late_penalty_per_occurrence: 0,
+          missing_checkout_penalty: 0,
+          work_days: "1,2,3,4,5,6",
+        },
+      });
+    } catch (hrConfigError) {
+      console.log("Failed to create HR store config:", hrConfigError.message);
+    }
+
     createLog({
       id_toko: newStore.id,
       id_user: req.user?.userId,
