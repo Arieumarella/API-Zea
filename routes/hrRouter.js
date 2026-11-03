@@ -12,12 +12,15 @@ const hrAttendanceController = require("../controllers/hrAttendanceController");
 const hrRequestController = require("../controllers/hrRequestController");
 const hrApprovalController = require("../controllers/hrApprovalController");
 const hrPayrollController = require("../controllers/hrPayrollController");
+const hrDashboardController = require("../controllers/hrDashboardController");
 
 router.use(hrEnabled);
 router.use(verifyToken);
 
 // ===================== Admin endpoints =====================
 const adminOnly = [requireSuperAdmin];
+
+router.get("/dashboard", ...adminOnly, hrDashboardController.summary);
 
 router.get("/store-configs", ...adminOnly, hrStoreConfigController.listStoreConfigs);
 router.get("/store-configs/:storeId", ...adminOnly, hrStoreConfigController.getStoreConfig);
@@ -28,10 +31,19 @@ router.post("/holidays", ...adminOnly, hrStoreConfigController.createHoliday);
 router.put("/holidays/:id", ...adminOnly, hrStoreConfigController.updateHoliday);
 router.delete("/holidays/:id", ...adminOnly, hrStoreConfigController.deleteHoliday);
 
+router.get("/shifts", ...adminOnly, hrStoreConfigController.listShifts);
+router.post("/shifts", ...adminOnly, hrStoreConfigController.createShift);
+router.put("/shifts/:id", ...adminOnly, hrStoreConfigController.updateShift);
+router.delete("/shifts/:id", ...adminOnly, hrStoreConfigController.deleteShift);
+
+router.get("/available-users", ...adminOnly, hrEmployeeController.listAvailableUsers);
 router.get("/employees", ...adminOnly, hrEmployeeController.listEmployees);
+router.get("/employees/:userId/salary-history", ...adminOnly, hrEmployeeController.getSalaryHistory);
 router.get("/employees/:userId", ...adminOnly, hrEmployeeController.getEmployee);
 router.put("/employees/:userId", ...adminOnly, hrEmployeeController.updateEmployee);
+router.delete("/employees/:userId", ...adminOnly, hrEmployeeController.deleteEmployee);
 
+router.get("/attendances/recap", ...adminOnly, hrAttendanceController.recap);
 router.get("/attendances", ...adminOnly, hrAttendanceController.listAttendances);
 router.put("/attendances/:id", ...adminOnly, hrAttendanceController.updateAttendance);
 

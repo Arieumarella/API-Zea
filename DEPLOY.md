@@ -110,8 +110,10 @@ Urutan deploy yang disarankan:
    ```
 
 6. **Post-audit**: jalankan `CHECKSUM TABLE` yang sama dan bandingkan. Semua tabel
-   existing harus identik. Hanya `_prisma_migrations` (+1 baris) dan 10 tabel HR baru
-   yang berubah.
+   existing harus identik. Yang berubah hanya `_prisma_migrations` (+2 baris: migrasi
+   HR awal + migrasi kuota cuti/tanggal berhenti) dan tabel HR (10 tabel baru, plus
+   kolom aditif `annual_leave_entitlement`, `leave_quota_year`, `resign_date` pada
+   `employee_profiles`). Tabel POS existing tidak tersentuh.
 
 7. **Backfill data awal** (hanya INSERT ke tabel baru):
    ```bash
@@ -134,7 +136,26 @@ Catatan:
 - Backfill HR **tidak** dijalankan otomatis oleh entrypoint; jalankan manual.
 - Container memakai `TZ=Asia/Jakarta`; pastikan environment ini ikut ter-deploy.
 
-If you want, saya bisa:
-- Menambahkan healthcheck di Compose untuk `app` service
-- Menambahkan automatic backups untuk MySQL volume
-- Menyediakan systemd unit atau script untuk auto-start on boot jika VPS tidak mendukung Docker Compose plugin
+Migrasi terbaru (20261103000000_add_hr_leave_year_resign):
+- Hanya `ALTER TABLE employee_profiles ADD COLUMN` (3 kolom baru), aman dan otomatis
+  diterapkan oleh entrypoint (`prisma migrate deploy`).
+- Inisialisasi nilai lama dilakukan otomatis oleh aplikasi saat pertama kali membaca
+  data (`syncAllLeaveQuotas`), **tanpa mengubah sisa cuti yang sudah ada**.
+
+Migrasi 20261104000000_add_hr_shifts_history_audit:
+- Tambah tabel `store_shifts` (multi-shift) dan `employee_salary_histories` (riwayat
+  gaji/jabatan), kolom `employee_profiles.shift_id`, dan kolom audit mobile di
+  `attendances` (mocked location, device_id, app_version). Semua aditif.
+- Env opsional `HR_MAX_ACCURACY_M` (default 50) membatasi akurasi GPS absensi.
+
+Backup otomatis:
+- Script: `scripts/backup.sh` (dump MySQL + tar folder `uploads`, simpan N hari).
+- Pasang cron di host, contoh setiap hari pukul 03.00:
+  ```bash
+  mkdir -p /root/backups
+  crontab -e
+  # tambahkan baris:
+  0 3 * * * /root/project/API-Zea/scripts/backup.sh >> /root/backups/backup.log 2>&1
+  ```
+- Verifikasi manual: `bash /root/project/API-Zea/scripts/backup.sh`
+- Monitoring: endpoint `GET /health` dipakai healthcheck Docker (container `healthy`).

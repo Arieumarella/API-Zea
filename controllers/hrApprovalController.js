@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 const { createLog } = require("../utils/logHelper");
 const { listDates, combineDateAndTime, dateString } = require("../utils/hrTime");
 const { serializeDecimalFields, photoUrl } = require("../utils/hrSerialize");
-const { isDateLockedByFinalPayroll, getStoreConfig } = require("../utils/hrShared");
+const { isDateLockedByFinalPayroll, getStoreConfig, syncLeaveQuota } = require("../utils/hrShared");
 
 const REQUEST_TYPES = ["leave", "overtime", "correction", "loan"];
 
@@ -169,13 +169,14 @@ async function approveLeave(request, adminNotes, adminUserId) {
   }
 
   if (request.type === "ANNUAL_LEAVE") {
-    const profile = await prisma.employee_profiles.findUnique({
+    const rawProfile = await prisma.employee_profiles.findUnique({
       where: { user_id: request.user_id },
     });
     const days = dates.length;
-    if (!profile) {
+    if (!rawProfile) {
       throw Object.assign(new Error("Pegawai belum memiliki profil HR."), { statusCode: 400 });
     }
+    const profile = await syncLeaveQuota(rawProfile);
     if (profile.annual_leave_quota < days) {
       throw Object.assign(
         new Error(`Kuota cuti tahunan tidak mencukupi (sisa ${profile.annual_leave_quota} hari).`),

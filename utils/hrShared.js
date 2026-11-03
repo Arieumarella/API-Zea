@@ -1,7 +1,7 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
-const { dateString } = require("./hrTime");
+const { dateString, nowJakarta } = require("./hrTime");
 
 async function getStoreConfig(storeId) {
   return prisma.store_hr_configs.findUnique({
@@ -48,10 +48,44 @@ async function getStoreNameMap(storeIds) {
   return map;
 }
 
+async function syncLeaveQuota(profile) {
+  if (!profile) return profile;
+  const year = nowJakarta().year();
+  if (profile.leave_quota_year === year) return profile;
+
+  const data = { leave_quota_year: year };
+  if (!profile.leave_quota_year) {
+    // First run after migration: keep the current remaining quota as the
+    // yearly entitlement so existing balances are not reset unexpectedly.
+    data.annual_leave_entitlement = profile.annual_leave_quota;
+  } else {
+    data.annual_leave_quota = profile.annual_leave_entitlement;
+  }
+
+  return prisma.employee_profiles.update({
+    where: { id: profile.id },
+    data,
+  });
+}
+
+async function syncAllLeaveQuotas() {
+  const year = nowJakarta().year();
+  await prisma.$executeRaw`
+    UPDATE employee_profiles
+    SET annual_leave_entitlement = annual_leave_quota, leave_quota_year = ${year}
+    WHERE leave_quota_year = 0`;
+  await prisma.$executeRaw`
+    UPDATE employee_profiles
+    SET annual_leave_quota = annual_leave_entitlement, leave_quota_year = ${year}
+    WHERE leave_quota_year <> 0 AND leave_quota_year <> ${year}`;
+}
+
 module.exports = {
   getStoreConfig,
   getStoreWithConfig,
   isDateLockedByFinalPayroll,
   getStoreNameMap,
+  syncLeaveQuota,
+  syncAllLeaveQuotas,
 };
 

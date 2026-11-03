@@ -125,6 +125,128 @@ exports.listAttendances = async (req, res) => {
   }
 };
 
+exports.recap = async (req, res) => {
+  try {
+    const startDate = req.query.start_date || null;
+    const endDate = req.query.end_date || null;
+    const storeId = req.query.store_id ? parseInt(req.query.store_id, 10) : null;
+    const search = req.query.search ? String(req.query.search).trim() : "";
+
+    const where = {};
+    if (storeId) where.store_id = storeId;
+    if (startDate || endDate) {
+      where.attendance_date = {};
+      if (startDate) where.attendance_date.gte = dateStart(startDate);
+      if (endDate) where.attendance_date.lte = dateEnd(endDate);
+    }
+
+    let userIds = null;
+    if (search) {
+      const matched = await prisma.t_user.findMany({
+        where: {
+          OR: [{ nama: { contains: search } }, { username: { contains: search } }],
+        },
+        select: { id: true },
+      });
+      userIds = matched.map((user) => user.id);
+      if (userIds.length === 0) {
+        return res.status(200).json({ status: true, data: [], start_date: startDate, end_date: endDate });
+      }
+      where.user_id = { in: userIds };
+    }
+
+    const records = await prisma.attendances.findMany({
+      where,
+      select: {
+        user_id: true,
+        store_id: true,
+        status: true,
+        late_minutes: true,
+        check_out_time: true,
+      },
+    });
+
+    const recapMap = new Map();
+    records.forEach((record) => {
+      let row = recapMap.get(record.user_id);
+      if (!row) {
+        row = {
+          user_id: record.user_id,
+          store_id: record.store_id,
+          total_days: 0,
+          present: 0,
+          late: 0,
+          sick: 0,
+          annual_leave: 0,
+          unpaid_leave: 0,
+          field_duty: 0,
+          alpha: 0,
+          late_minutes: 0,
+          missing_checkout: 0,
+        };
+        recapMap.set(record.user_id, row);
+      }
+
+      row.total_days += 1;
+      if (record.status === "PRESENT") row.present += 1;
+      else if (record.status === "LATE") row.late += 1;
+      else if (record.status === "SICK") row.sick += 1;
+      else if (record.status === "ANNUAL_LEAVE") row.annual_leave += 1;
+      else if (record.status === "UNPAID_LEAVE") row.unpaid_leave += 1;
+      else if (record.status === "FIELD_DUTY") row.field_duty += 1;
+      else if (record.status === "ALPHA") row.alpha += 1;
+
+      row.late_minutes += record.late_minutes || 0;
+      if ((record.status === "PRESENT" || record.status === "LATE") && !record.check_out_time) {
+        row.missing_checkout += 1;
+      }
+    });
+
+    const userIdList = [...recapMap.keys()];
+    const [users, stores] = await Promise.all([
+      prisma.t_user.findMany({
+        where: { id: { in: userIdList } },
+        select: { id: true, username: true, nama: true, jabatan: true },
+      }),
+      prisma.t_toko.findMany({
+        where: { id: { in: [...new Set(records.map((record) => record.store_id))] } },
+        select: { id: true, nama_toko: true },
+      }),
+    ]);
+
+    const userMap = {};
+    users.forEach((user) => {
+      userMap[user.id] = user;
+    });
+    const storeMap = {};
+    stores.forEach((store) => {
+      storeMap[store.id] = store.nama_toko;
+    });
+
+    const data = [...recapMap.values()]
+      .map((row) => ({
+        ...row,
+        user: userMap[row.user_id] || null,
+        nama_toko: storeMap[row.store_id] || `Toko #${row.store_id}`,
+      }))
+      .sort((a, b) => {
+        const nameA = (a.user && (a.user.nama || a.user.username)) || "";
+        const nameB = (b.user && (b.user.nama || b.user.username)) || "";
+        return nameA.localeCompare(nameB);
+      });
+
+    return res.status(200).json({
+      status: true,
+      data,
+      start_date: startDate,
+      end_date: endDate,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: error.message });
+  }
+};
+
 exports.updateAttendance = async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
@@ -221,6 +343,12 @@ exports.getMyToday = async (req, res) => {
       prisma.t_toko.findUnique({ where: { id: profile.store_id } }),
     ]);
 
+    const shiftRow = profile.shift_id
+      ? await prisma.store_shifts.findUnique({ where: { id: profile.shift_id } })
+      : null;
+    const activeShift =
+      shiftRow && shiftRow.is_active && shiftRow.store_id === profile.store_id ? shiftRow : null;
+
     return res.status(200).json({
       status: true,
       data: {
@@ -234,11 +362,22 @@ exports.getMyToday = async (req, res) => {
           latitude: toNumber(config?.latitude),
           longitude: toNumber(config?.longitude),
           radius_meters: config?.radius_meters ?? 50,
-          work_start_time: config?.work_start_time ?? "08:00",
-          work_end_time: config?.work_end_time ?? "17:00",
-          grace_period_minutes: config?.grace_period_minutes ?? 15,
+          work_start_time: activeShift ? activeShift.work_start_time : config?.work_start_time ?? "08:00",
+          work_end_time: activeShift ? activeShift.work_end_time : config?.work_end_time ?? "17:00",
+          grace_period_minutes: activeShift
+            ? activeShift.grace_period_minutes
+            : config?.grace_period_minutes ?? 15,
           work_days: config?.work_days ?? "1,2,3,4,5,6",
           location_configured: Boolean(config?.latitude && config?.longitude),
+          shift: activeShift
+            ? {
+                id: activeShift.id,
+                name: activeShift.name,
+                work_start_time: activeShift.work_start_time,
+                work_end_time: activeShift.work_end_time,
+                grace_period_minutes: activeShift.grace_period_minutes,
+              }
+            : null,
         },
       },
     });
@@ -252,10 +391,28 @@ exports.clock = async (req, res) => {
   try {
     const profile = req.employee;
     const userId = profile.user_id;
-    const { type, latitude, longitude, accuracy, store_id, notes } = req.body;
+    const {
+      type,
+      latitude,
+      longitude,
+      accuracy,
+      store_id,
+      notes,
+      is_mocked_location,
+      device_id,
+      app_version,
+    } = req.body;
 
     if (type !== "IN" && type !== "OUT") {
       return res.status(400).json({ status: false, message: "Jenis absen tidak valid." });
+    }
+
+    const isMocked = is_mocked_location === true || is_mocked_location === "true";
+    if (isMocked) {
+      return res.status(400).json({
+        status: false,
+        message: "Lokasi palsu (mock location) terdeteksi. Matikan aplikasi pemalsu lokasi lalu coba lagi.",
+      });
     }
 
     if (!req.file) {
@@ -307,10 +464,35 @@ exports.clock = async (req, res) => {
 
     const now = nowJakarta();
     const today = now.format("YYYY-MM-DD");
-    const photoPath = await processSelfie(req.file.buffer, userId);
     const accuracyNumber = accuracy !== undefined && accuracy !== null && accuracy !== ""
       ? Number(accuracy)
       : null;
+
+    const maxAccuracy = process.env.HR_MAX_ACCURACY_M ? parseInt(process.env.HR_MAX_ACCURACY_M, 10) : 50;
+    if (
+      accuracyNumber !== null &&
+      !Number.isNaN(accuracyNumber) &&
+      accuracyNumber > maxAccuracy
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: `Akurasi GPS terlalu rendah (±${Math.round(accuracyNumber)} m). Cari lokasi dengan sinyal GPS lebih baik (maks. ±${maxAccuracy} m).`,
+      });
+    }
+
+    const photoPath = await processSelfie(req.file.buffer, userId);
+
+    let shift = null;
+    if (profile.shift_id) {
+      const foundShift = await prisma.store_shifts.findUnique({
+        where: { id: profile.shift_id },
+      });
+      if (foundShift && foundShift.is_active && foundShift.store_id === storeId) {
+        shift = foundShift;
+      }
+    }
+    const workStartTime = shift ? shift.work_start_time : config.work_start_time;
+    const graceMinutes = shift ? shift.grace_period_minutes : config.grace_period_minutes;
 
     if (type === "IN") {
       const existing = await prisma.attendances.findFirst({
@@ -327,10 +509,10 @@ exports.clock = async (req, res) => {
       }
 
       const nowMinutes = now.hour() * 60 + now.minute();
-      const startMinutes = timeToMinutes(config.work_start_time);
+      const startMinutes = timeToMinutes(workStartTime);
       let status = "PRESENT";
       let lateMinutes = 0;
-      if (nowMinutes > startMinutes + config.grace_period_minutes) {
+      if (nowMinutes > startMinutes + graceMinutes) {
         status = "LATE";
         lateMinutes = nowMinutes - startMinutes;
       }
@@ -346,6 +528,9 @@ exports.clock = async (req, res) => {
           check_in_longitude: Number(longitude),
           check_in_distance_m: distanceMeters,
           check_in_accuracy_m: accuracyNumber,
+          check_in_is_mocked_location: isMocked,
+          device_id: device_id ? String(device_id).slice(0, 100) : null,
+          app_version: app_version ? String(app_version).slice(0, 20) : null,
           status,
           late_minutes: lateMinutes,
           notes: notes || null,
@@ -390,6 +575,13 @@ exports.clock = async (req, res) => {
         check_out_longitude: Number(longitude),
         check_out_distance_m: distanceMeters,
         check_out_accuracy_m: accuracyNumber,
+        check_out_is_mocked_location: isMocked,
+        device_id: device_id
+          ? String(device_id).slice(0, 100)
+          : existing.device_id,
+        app_version: app_version
+          ? String(app_version).slice(0, 20)
+          : existing.app_version,
         notes: notes ? [existing.notes, notes].filter(Boolean).join(" | ") : existing.notes,
       },
     });

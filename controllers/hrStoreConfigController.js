@@ -382,3 +382,170 @@ exports.deleteHoliday = async (req, res) => {
   }
 };
 
+exports.listShifts = async (req, res) => {
+  try {
+    const storeId = req.query.store_id ? parseInt(req.query.store_id, 10) : null;
+    const where = storeId ? { store_id: storeId } : {};
+    const shifts = await prisma.store_shifts.findMany({
+      where,
+      orderBy: [{ store_id: "asc" }, { id: "asc" }],
+    });
+    return res.status(200).json({ status: true, data: shifts });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+exports.createShift = async (req, res) => {
+  try {
+    const { store_id, name, work_start_time, work_end_time, grace_period_minutes, is_active } = req.body;
+
+    const storeId = parseInt(store_id, 10);
+    if (Number.isNaN(storeId)) {
+      return res.status(400).json({ status: false, message: "Toko wajib dipilih." });
+    }
+    const store = await prisma.t_toko.findUnique({ where: { id: storeId } });
+    if (!store) {
+      return res.status(404).json({ status: false, message: "Toko tidak ditemukan" });
+    }
+    if (!name || !name.trim()) {
+      return res.status(400).json({ status: false, message: "Nama shift wajib diisi." });
+    }
+    const startTime = (work_start_time || "08:00").trim();
+    const endTime = (work_end_time || "17:00").trim();
+    if (!validateTimeString(startTime) || !validateTimeString(endTime)) {
+      return res.status(400).json({ status: false, message: "Format jam shift tidak valid (HH:mm)." });
+    }
+    if (timeToMinutes(endTime) <= timeToMinutes(startTime)) {
+      return res.status(400).json({ status: false, message: "Jam pulang shift harus setelah jam masuk." });
+    }
+    const grace = parseInt(grace_period_minutes ?? 15, 10);
+    if (Number.isNaN(grace) || grace < 0 || grace > 240) {
+      return res.status(400).json({
+        status: false,
+        message: "Toleransi telat shift harus antara 0 sampai 240 menit.",
+      });
+    }
+
+    const shift = await prisma.store_shifts.create({
+      data: {
+        store_id: storeId,
+        name: name.trim(),
+        work_start_time: startTime,
+        work_end_time: endTime,
+        grace_period_minutes: grace,
+        is_active: is_active !== false,
+      },
+    });
+
+    createLog({
+      id_toko: storeId,
+      id_user: req.user?.userId,
+      aksi: "TAMBAH_HR_SHIFT",
+      keterangan: `Menambah shift '${shift.name}' (${startTime}-${endTime}) untuk toko #${storeId}`,
+    });
+
+    return res.status(201).json({ status: true, message: "Shift berhasil ditambahkan.", data: shift });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+exports.updateShift = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const existing = await prisma.store_shifts.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ status: false, message: "Shift tidak ditemukan" });
+    }
+
+    const { name, work_start_time, work_end_time, grace_period_minutes, is_active } = req.body;
+    const data = {};
+
+    if (name !== undefined) {
+      if (!name.trim()) {
+        return res.status(400).json({ status: false, message: "Nama shift wajib diisi." });
+      }
+      data.name = name.trim();
+    }
+    if (work_start_time !== undefined) {
+      if (!validateTimeString(work_start_time)) {
+        return res.status(400).json({ status: false, message: "Format jam masuk tidak valid (HH:mm)." });
+      }
+      data.work_start_time = work_start_time.trim();
+    }
+    if (work_end_time !== undefined) {
+      if (!validateTimeString(work_end_time)) {
+        return res.status(400).json({ status: false, message: "Format jam pulang tidak valid (HH:mm)." });
+      }
+      data.work_end_time = work_end_time.trim();
+    }
+    const finalStart = data.work_start_time !== undefined ? data.work_start_time : existing.work_start_time;
+    const finalEnd = data.work_end_time !== undefined ? data.work_end_time : existing.work_end_time;
+    if (timeToMinutes(finalEnd) <= timeToMinutes(finalStart)) {
+      return res.status(400).json({ status: false, message: "Jam pulang shift harus setelah jam masuk." });
+    }
+    if (grace_period_minutes !== undefined) {
+      const grace = parseInt(grace_period_minutes, 10);
+      if (Number.isNaN(grace) || grace < 0 || grace > 240) {
+        return res.status(400).json({
+          status: false,
+          message: "Toleransi telat shift harus antara 0 sampai 240 menit.",
+        });
+      }
+      data.grace_period_minutes = grace;
+    }
+    if (is_active !== undefined) {
+      data.is_active = is_active === true || is_active === "true";
+    }
+
+    const shift = await prisma.store_shifts.update({ where: { id }, data });
+
+    createLog({
+      id_toko: shift.store_id,
+      id_user: req.user?.userId,
+      aksi: "EDIT_HR_SHIFT",
+      keterangan: `Memperbarui shift #${id} '${shift.name}'`,
+    });
+
+    return res.status(200).json({ status: true, message: "Shift berhasil diperbarui.", data: shift });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+exports.deleteShift = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const existing = await prisma.store_shifts.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ status: false, message: "Shift tidak ditemukan" });
+    }
+
+    const usedBy = await prisma.employee_profiles.count({ where: { shift_id: id } });
+    if (usedBy > 0) {
+      return res.status(400).json({
+        status: false,
+        message: `Shift masih dipakai oleh ${usedBy} pegawai. Pindahkan pegawai ke shift lain terlebih dahulu.`,
+      });
+    }
+
+    await prisma.store_shifts.delete({ where: { id } });
+
+    createLog({
+      id_toko: existing.store_id,
+      id_user: req.user?.userId,
+      aksi: "HAPUS_HR_SHIFT",
+      keterangan: `Menghapus shift #${id} '${existing.name}'`,
+    });
+
+    return res.status(200).json({ status: true, message: "Shift berhasil dihapus." });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: error.message });
+  }
+};
+

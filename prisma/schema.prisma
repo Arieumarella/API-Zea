@@ -283,13 +283,18 @@ model employee_profiles {
   bank_account               String?   @db.VarChar(50)
   bank_name                  String?   @db.VarChar(100)
   annual_leave_quota         Int       @default(12)
+  annual_leave_entitlement   Int       @default(12)
+  leave_quota_year           Int       @default(0)
   join_date                  DateTime? @db.Date
+  resign_date                DateTime? @db.Date
+  shift_id                   Int?
   allow_any_store_checkin    Boolean   @default(false)
   is_active                  Boolean   @default(true)
   created_at                 DateTime  @default(now()) @db.DateTime(0)
   updated_at                 DateTime  @default(now()) @updatedAt @db.DateTime(0)
 
   @@index([store_id])
+  @@index([shift_id])
   @@map("employee_profiles")
 }
 
@@ -310,6 +315,10 @@ model attendances {
   check_out_longitude      Decimal?         @db.Decimal(10, 7)
   check_out_distance_m     Decimal?         @db.Decimal(10, 2)
   check_out_accuracy_m     Decimal?         @db.Decimal(10, 2)
+  check_in_is_mocked_location  Boolean          @default(false)
+  check_out_is_mocked_location Boolean          @default(false)
+  device_id                String?          @db.VarChar(100)
+  app_version              String?          @db.VarChar(20)
   status                   AttendanceStatus
   late_minutes             Int              @default(0)
   notes                    String?          @db.Text
@@ -320,6 +329,36 @@ model attendances {
   @@index([store_id, attendance_date])
   @@index([status])
   @@map("attendances")
+}
+
+model store_shifts {
+  id                  Int      @id @default(autoincrement())
+  store_id            Int
+  name                String   @db.VarChar(100)
+  work_start_time     String   @default("08:00") @db.VarChar(5)
+  work_end_time       String   @default("17:00") @db.VarChar(5)
+  grace_period_minutes Int     @default(15)
+  is_active           Boolean  @default(true)
+  created_at          DateTime @default(now()) @db.DateTime(0)
+  updated_at          DateTime @default(now()) @updatedAt @db.DateTime(0)
+
+  @@index([store_id])
+  @@map("store_shifts")
+}
+
+model employee_salary_histories {
+  id             Int      @id @default(autoincrement())
+  user_id        Int
+  store_id       Int
+  effective_date DateTime @db.Date
+  position       String?  @db.VarChar(100)
+  base_salary    Decimal  @default(0) @db.Decimal(15, 2)
+  notes          String?  @db.Text
+  created_by     Int?
+  created_at     DateTime @default(now()) @db.DateTime(0)
+
+  @@index([user_id])
+  @@map("employee_salary_histories")
 }
 
 model leave_requests {

@@ -1,5 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const { syncLeaveQuota } = require("../utils/hrShared");
 
 function hrEnabled(req, res, next) {
   if (process.env.HR_MODULE_ENABLED === "false") {
@@ -39,7 +40,7 @@ async function requireEmployee(req, res, next) {
         message: "Status pegawai Anda tidak aktif. Hubungi admin.",
       });
     }
-    req.employee = profile;
+    req.employee = await syncLeaveQuota(profile);
     next();
   } catch (error) {
     console.log(error);

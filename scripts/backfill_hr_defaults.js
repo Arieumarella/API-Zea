@@ -76,6 +76,8 @@ async function main() {
           fixed_transport_allowance: 0,
           overtime_rate_per_hour: 0,
           annual_leave_quota: 12,
+          annual_leave_entitlement: 12,
+          leave_quota_year: new Date().getFullYear(),
           join_date: toDateOnly(user.created_at),
           allow_any_store_checkin: false,
           is_active: true,
