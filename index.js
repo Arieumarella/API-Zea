@@ -2,6 +2,8 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const app = express();
+// Di belakang nginx: hormati X-Forwarded-Proto agar req.protocol = https.
+app.set("trust proxy", 1);
 const port = process.env.PORT || 3000;
 
 // Configure CORS to allow one or multiple origins set in FRONTEND_URL
