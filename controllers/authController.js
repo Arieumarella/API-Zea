@@ -47,7 +47,7 @@ async function getEmployeeHrData(userId, fallbackStoreId) {
 
 exports.login = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, device_id } = req.body;
     const user = await prisma.t_user.findFirst({ where: { username } });
     if (!user) {
       return res
@@ -64,16 +64,33 @@ exports.login = async (req, res) => {
     const defaultTokoId = user.id_toko || 1;
     const userRole = user.role || "ADMIN_TOKO";
 
+    // Satu sesi aktif per akun: login baru menonaktifkan sesi lama.
+    const sessionId = require("crypto").randomUUID();
+
     const token = jwt.sign(
       {
         userId: user.id,
         username: user.username,
         role: userRole,
         id_toko: defaultTokoId,
+        session: sessionId,
       },
       SECRET_KEY,
       { expiresIn: "12h" }
     );
+
+    await prisma.user_sessions.upsert({
+      where: { user_id: user.id },
+      update: {
+        session_id: sessionId,
+        device_id: device_id ? String(device_id).slice(0, 100) : null,
+      },
+      create: {
+        user_id: user.id,
+        session_id: sessionId,
+        device_id: device_id ? String(device_id).slice(0, 100) : null,
+      },
+    });
 
     // Fetch store profile if assigned
     const store = await prisma.t_toko.findUnique({
@@ -160,27 +177,47 @@ exports.verifyToken = async (req, res, next) => {
       return res
         .status(401)
         .json({ status: false, message: "No token provided" });
-    jwt.verify(token, SECRET_KEY, (err, decoded) => {
+    jwt.verify(token, SECRET_KEY, async (err, decoded) => {
       if (err)
         return res
           .status(403)
           .json({ status: false, message: "Invalid token" });
-      req.user = decoded;
 
-      // Only Super Admin may switch store context via X-Toko-Id header.
-      // Other roles always use the store stored in their token.
-      const headerTokoId = req.headers["x-toko-id"];
-      if (
-        decoded.role === "SUPER_ADMIN" &&
-        headerTokoId &&
-        !isNaN(parseInt(headerTokoId))
-      ) {
-        req.id_toko = parseInt(headerTokoId);
-      } else {
-        req.id_toko = decoded.id_toko ? parseInt(decoded.id_toko) : 1;
+      try {
+        // Single-session: tolak token lama jika akun sudah login di perangkat lain.
+        if (decoded.session) {
+          const activeSession = await prisma.user_sessions.findUnique({
+            where: { user_id: decoded.userId },
+          });
+          if (activeSession && activeSession.session_id !== decoded.session) {
+            return res.status(401).json({
+              status: false,
+              message:
+                "Akun Anda telah dipakai login di perangkat lain. Silakan login kembali.",
+            });
+          }
+        }
+
+        req.user = decoded;
+
+        // Only Super Admin may switch store context via X-Toko-Id header.
+        // Other roles always use the store stored in their token.
+        const headerTokoId = req.headers["x-toko-id"];
+        if (
+          decoded.role === "SUPER_ADMIN" &&
+          headerTokoId &&
+          !isNaN(parseInt(headerTokoId))
+        ) {
+          req.id_toko = parseInt(headerTokoId);
+        } else {
+          req.id_toko = decoded.id_toko ? parseInt(decoded.id_toko) : 1;
+        }
+
+        next();
+      } catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: false, message: error.message });
       }
-
-      next();
     });
   } catch (error) {
     console.log(error);

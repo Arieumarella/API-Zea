@@ -361,6 +361,17 @@ model employee_salary_histories {
   @@map("employee_salary_histories")
 }
 
+model user_sessions {
+  id         Int      @id @default(autoincrement())
+  user_id    Int      @unique
+  session_id String   @db.VarChar(100)
+  device_id  String?  @db.VarChar(100)
+  created_at DateTime @default(now()) @db.DateTime(0)
+  updated_at DateTime @default(now()) @updatedAt @db.DateTime(0)
+
+  @@map("user_sessions")
+}
+
 model leave_requests {
   id           Int           @id @default(autoincrement())
   user_id      Int
