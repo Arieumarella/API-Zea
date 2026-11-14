@@ -13,6 +13,7 @@ function photoUrl(req, relativePath) {
 
 const MONEY_FIELDS = [
   "base_salary",
+  "base_pay_amount",
   "fixed_meal_allowance",
   "fixed_transport_allowance",
   "overtime_rate_per_hour",

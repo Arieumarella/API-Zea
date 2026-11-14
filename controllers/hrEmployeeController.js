@@ -245,6 +245,8 @@ function validateNonNegativeNumber(value, fieldName) {
   return null;
 }
 
+const SALARY_TYPES = ["MONTHLY", "WEEKLY", "DAILY"];
+
 exports.updateEmployee = async (req, res) => {
   try {
     const userId = parseInt(req.params.userId, 10);
@@ -259,6 +261,7 @@ exports.updateEmployee = async (req, res) => {
       nik,
       shift_id,
       position,
+      salary_type,
       base_salary,
       fixed_meal_allowance,
       fixed_transport_allowance,
@@ -284,6 +287,15 @@ exports.updateEmployee = async (req, res) => {
       const error = validateNonNegativeNumber(value, field);
       if (error) errors.push(error);
     });
+
+    if (
+      salary_type !== undefined &&
+      salary_type !== null &&
+      salary_type !== "" &&
+      !SALARY_TYPES.includes(salary_type)
+    ) {
+      errors.push("Tipe penggajian tidak valid.");
+    }
 
     let storeId = null;
     if (store_id !== undefined && store_id !== null && store_id !== "") {
@@ -361,6 +373,9 @@ exports.updateEmployee = async (req, res) => {
     }
     if (nik !== undefined) data.nik = nik === "" ? null : nik;
     if (position !== undefined) data.position = position === "" ? null : position;
+    if (salary_type !== undefined && salary_type !== null && salary_type !== "") {
+      data.salary_type = salary_type;
+    }
     if (base_salary !== undefined && base_salary !== null && base_salary !== "") {
       data.base_salary = Number(base_salary);
     }
@@ -428,14 +443,17 @@ exports.updateEmployee = async (req, res) => {
         data.position !== undefined && (existing.position || null) !== (profile.position || null);
       const salaryChanged =
         data.base_salary !== undefined && Number(existing.base_salary) !== Number(profile.base_salary);
+      const salaryTypeChanged =
+        data.salary_type !== undefined && existing.salary_type !== profile.salary_type;
 
-      if (positionChanged || salaryChanged) {
+      if (positionChanged || salaryChanged || salaryTypeChanged) {
         await prisma.employee_salary_histories.create({
           data: {
             user_id: userId,
             store_id: profile.store_id,
             effective_date: new Date(`${nowJakarta().format("YYYY-MM-DD")}T00:00:00Z`),
             position: profile.position || null,
+            salary_type: profile.salary_type,
             base_salary: profile.base_salary,
             notes: "Perubahan gaji/jabatan",
             created_by: req.user?.userId || null,
@@ -450,6 +468,7 @@ exports.updateEmployee = async (req, res) => {
           employee_code: data.employee_code || null,
           nik: data.nik || null,
           position: data.position || user.jabatan || "Staff",
+          salary_type: data.salary_type || "MONTHLY",
           base_salary: data.base_salary || 0,
           fixed_meal_allowance: data.fixed_meal_allowance || 0,
           fixed_transport_allowance: data.fixed_transport_allowance || 0,
@@ -478,6 +497,7 @@ exports.updateEmployee = async (req, res) => {
           store_id: profile.store_id,
           effective_date: profile.join_date || new Date(`${nowJakarta().format("YYYY-MM-DD")}T00:00:00Z`),
           position: profile.position || user.jabatan || null,
+          salary_type: profile.salary_type,
           base_salary: profile.base_salary,
           notes: "Gaji awal",
           created_by: req.user?.userId || null,

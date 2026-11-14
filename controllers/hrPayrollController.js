@@ -222,6 +222,7 @@ exports.generate = async (req, res) => {
           late_penalty_per_occurrence: Number(config.late_penalty_per_occurrence),
           missing_checkout_penalty: Number(config.missing_checkout_penalty),
         },
+        salaryType: profile.salary_type,
         periodStart: cutoff_start_date,
         periodEnd: cutoff_end_date,
         attendanceRows: attendances,
@@ -243,7 +244,9 @@ exports.generate = async (req, res) => {
         bank_name_snapshot: profile.bank_name,
         period_start: dateStart(cutoff_start_date),
         period_end: dateEnd(cutoff_end_date),
+        salary_type_snapshot: profile.salary_type,
         base_salary: Number(profile.base_salary),
+        base_pay_amount: calculation.basePayAmount,
         fixed_meal_allowance: Number(profile.fixed_meal_allowance),
         fixed_transport_allowance: Number(profile.fixed_transport_allowance),
         overtime_rate_per_hour: Number(profile.overtime_rate_per_hour),
@@ -450,7 +453,7 @@ exports.updatePayslip = async (req, res) => {
     const other = data.other_deduction_amount !== undefined ? data.other_deduction_amount : Number(payslip.other_deduction_amount);
 
     const gross = round2(
-      Number(payslip.base_salary) +
+      Number(payslip.base_pay_amount ?? payslip.base_salary) +
         Number(payslip.meal_allowance_amount) +
         Number(payslip.transport_allowance_amount) +
         Number(payslip.overtime_pay) +

@@ -1,5 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const { buildFifoPurchasePriceMap } = require("../utils/fifoPurchasePrice");
 
 // Create transaksi keluar with details
 exports.createTransaksiKeluar = async (req, res) => {
@@ -412,6 +413,19 @@ exports.getTransaksiKeluar = async (req, res) => {
         created_at: d.created_at,
         updated_at: d.updated_at,
       });
+    }
+
+    if (req.query.includeHargaBeli === "true" && detailBarangIds.length > 0) {
+      const hargaBeliMap = await buildFifoPurchasePriceMap(prisma, {
+        idToko: id_toko,
+        barangIds: detailBarangIds,
+      });
+
+      for (const list of Object.values(detailsMap)) {
+        for (const detail of list) {
+          detail.harga_beli = hargaBeliMap.get(detail.id) ?? 0;
+        }
+      }
     }
 
     // Buat map berjangka berdasarkan id_transaksi

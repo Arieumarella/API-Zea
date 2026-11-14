@@ -16,6 +16,7 @@ function calculatePayrollForEmployee({
   overtimeRows = [],
   loans = [],
   holidays = [],
+  salaryType = "MONTHLY",
 }) {
   const workDates = listWorkDates(
     periodStart,
@@ -48,8 +49,32 @@ function calculatePayrollForEmployee({
     0,
     totalWorkingDays - presentCount - paidLeaveCount - unpaidLeaveCount
   );
-  const dailyRate =
+  const payableDays = presentCount + paidLeaveCount;
+  const workDaysPerWeek = Math.max(
+    1,
+    String(config.work_days || "")
+      .split(",")
+      .map((day) => day.trim())
+      .filter(Boolean).length || 6
+  );
+  const monthlyDailyRate =
     totalWorkingDays > 0 ? Number(profile.base_salary) / totalWorkingDays : 0;
+
+  let basePayAmount;
+  let absenceDeductionAmount = 0;
+  let unpaidLeaveDeductionAmount = 0;
+
+  if (salaryType === "DAILY") {
+    basePayAmount = round2(Number(profile.base_salary) * payableDays);
+  } else if (salaryType === "WEEKLY") {
+    const weeklyDailyRate =
+      Number(profile.base_salary) / workDaysPerWeek;
+    basePayAmount = round2(weeklyDailyRate * payableDays);
+  } else {
+    basePayAmount = round2(Number(profile.base_salary));
+    absenceDeductionAmount = round2(absentDays * monthlyDailyRate);
+    unpaidLeaveDeductionAmount = round2(unpaidLeaveCount * monthlyDailyRate);
+  }
 
   const mealAllowanceAmount = round2(
     presentCount * Number(profile.fixed_meal_allowance)
@@ -57,8 +82,6 @@ function calculatePayrollForEmployee({
   const transportAllowanceAmount = round2(
     presentCount * Number(profile.fixed_transport_allowance)
   );
-  const absenceDeductionAmount = round2(absentDays * dailyRate);
-  const unpaidLeaveDeductionAmount = round2(unpaidLeaveCount * dailyRate);
   const lateDeductionAmount = round2(
     lateCount * Number(config.late_penalty_per_occurrence)
   );
@@ -94,7 +117,7 @@ function calculatePayrollForEmployee({
   const otherDeductionAmount = 0;
 
   const grossSalary = round2(
-    Number(profile.base_salary) +
+    basePayAmount +
       mealAllowanceAmount +
       transportAllowanceAmount +
       overtimePay +
@@ -111,6 +134,10 @@ function calculatePayrollForEmployee({
   const netSalary = round2(grossSalary - totalDeduction);
 
   return {
+    salaryType,
+    payableDays,
+    workDaysPerWeek,
+    basePayAmount,
     totalWorkingDays,
     totalPresentDays: presentCount,
     totalLateCount: lateCount,

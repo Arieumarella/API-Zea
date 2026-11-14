@@ -238,6 +238,12 @@ enum PayrollStatus {
   FINAL
 }
 
+enum SalaryType {
+  MONTHLY
+  WEEKLY
+  DAILY
+}
+
 model store_hr_configs {
   id                           Int      @id @default(autoincrement())
   store_id                     Int      @unique
@@ -276,6 +282,7 @@ model employee_profiles {
   employee_code              String?   @unique @db.VarChar(50)
   nik                        String?   @db.VarChar(30)
   position                   String?   @db.VarChar(100)
+  salary_type                SalaryType @default(MONTHLY)
   base_salary                Decimal   @default(0) @db.Decimal(15, 2)
   fixed_meal_allowance       Decimal   @default(0) @db.Decimal(15, 2)
   fixed_transport_allowance  Decimal   @default(0) @db.Decimal(15, 2)
@@ -352,6 +359,7 @@ model employee_salary_histories {
   store_id       Int
   effective_date DateTime @db.Date
   position       String?  @db.VarChar(100)
+  salary_type    SalaryType @default(MONTHLY)
   base_salary    Decimal  @default(0) @db.Decimal(15, 2)
   notes          String?  @db.Text
   created_by     Int?
@@ -491,7 +499,9 @@ model payslips {
   bank_name_snapshot                String?  @db.VarChar(100)
   period_start                      DateTime @db.Date
   period_end                        DateTime @db.Date
+  salary_type_snapshot              SalaryType @default(MONTHLY)
   base_salary                       Decimal  @default(0) @db.Decimal(15, 2)
+  base_pay_amount                   Decimal? @db.Decimal(15, 2)
   fixed_meal_allowance              Decimal  @default(0) @db.Decimal(15, 2)
   fixed_transport_allowance         Decimal  @default(0) @db.Decimal(15, 2)
   overtime_rate_per_hour            Decimal  @default(0) @db.Decimal(15, 2)
