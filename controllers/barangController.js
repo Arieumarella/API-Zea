@@ -352,6 +352,7 @@ exports.stockBarang = async (req, res) => {
     const take = isAll ? undefined : 10;
     const skip = isAll ? undefined : (page - 1) * take;
     const search = req.query.search || "";
+    const minus = req.query.minus === "true";
     const id_toko = req.id_toko || 1;
 
     const where = {
@@ -361,6 +362,18 @@ exports.stockBarang = async (req, res) => {
             OR: [
               { nama_barang: { contains: search } },
               { kd_barang: { contains: search } },
+            ],
+          }
+        : {}),
+      ...(minus
+        ? {
+            AND: [
+              {
+                OR: [
+                  { jml_yard: { lt: 0 } },
+                  { jml_rol: { lt: 0 } },
+                ],
+              },
             ],
           }
         : {}),
